@@ -1,0 +1,29 @@
+#version 430
+
+const uint array_part_size = 256;
+shared float temp_res[array_part_size];
+
+layout( local_size_x = 256 ) in;
+
+layout( push_constant ) uniform params {
+    uint len;
+} PushConstant;
+
+layout(std430, binding = 0) buffer result
+{
+    float Result[];
+};
+
+layout(std430, binding = 1) buffer sums
+{
+    float Sums[];
+};
+
+void main() {
+    uint idx = gl_WorkGroupID.x;
+    uint global_idx = gl_GlobalInvocationID.x;
+
+    if (global_idx < PushConstant.len) {
+        Result[global_idx] += Sums[idx];
+    }
+}

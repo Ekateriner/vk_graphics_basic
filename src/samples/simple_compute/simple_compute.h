@@ -57,7 +57,8 @@ private:
 
   std::shared_ptr<vk_utils::DescriptorMaker> m_pBindings = nullptr;
 
-  uint32_t m_length  = 16u;
+  const uint32_t m_length  = 256*256;
+  const uint32_t m_block_size = 256;
   
   VkPhysicalDeviceFeatures m_enabledDeviceFeatures = {};
   std::vector<const char*> m_deviceExtensions      = {};
@@ -67,13 +68,25 @@ private:
   std::vector<const char*> m_validationLayers;
   std::shared_ptr<vk_utils::ICopyEngine> m_pCopyHelper;
 
-  VkDescriptorSet       m_sumDS; 
-  VkDescriptorSetLayout m_sumDSLayout = nullptr;
-  
-  VkPipeline m_pipeline;
-  VkPipelineLayout m_layout;
+  VkDescriptorSet       m_first_scanDS;
+  VkDescriptorSet       m_second_scanDS;
+  VkDescriptorSetLayout m_scanDSLayout = nullptr;
 
-  VkBuffer m_A, m_B, m_sum;
+  VkDescriptorSet       m_add_shiftDS;
+  VkDescriptorSetLayout m_add_shiftDSLayout = nullptr;
+  
+  VkPipeline m_scan_pipeline;
+  VkPipelineLayout m_scan_layout;
+
+  VkPipeline m_add_shift_pipeline;
+  VkPipelineLayout m_add_shift_layout;
+
+  VkBuffer m_Arr, m_Result, m_Sums;
+
+  struct push_const {
+    uint32_t len;
+    uint32_t stage;
+  } m_scan_pushConst;
  
   void CreateInstance();
   void CreateDevice(uint32_t a_deviceId);
