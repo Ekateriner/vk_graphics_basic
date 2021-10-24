@@ -153,10 +153,10 @@ void SimpleCompute::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkPipeli
   m_scan_pushConst.stage = 1;
   vkCmdPushConstants(a_cmdBuff, m_scan_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(m_scan_pushConst), &m_scan_pushConst);
 
+  vkCmdDispatch(a_cmdBuff, 1, 1, 1);
+
   vkCmdPipelineBarrier(a_cmdBuff, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                        {}, 0, nullptr, 1, &barrier, 0, nullptr);
-
-  vkCmdDispatch(a_cmdBuff, 1, 1, 1);
 
   vkCmdBindPipeline      (a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, m_add_shift_pipeline);
   vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, m_add_shift_layout, 0, 1, &m_add_shiftDS, 0, NULL);
