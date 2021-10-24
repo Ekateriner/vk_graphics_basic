@@ -25,8 +25,8 @@ void main()
 
   vec4 center_clr = textureLod(colorTex, surf.texCoord, 0);
   //conv
-  for (int i = -kernel_size; i < kernel_size; i += stride) {
-    for (int j = -kernel_size; j < kernel_size; j += stride) {
+  for (int i = -kernel_size / 2; i <= kernel_size / 2; i += stride) {
+    for (int j = -kernel_size / 2; j <= kernel_size / 2; j += stride) {
       vec4 c = textureLod(colorTex, surf.texCoord + vec2(i*dx, j*dy), 0);
       float f = float(i) * float(i) + float(j) * float(j);
       float w = exp(-k1 * f);
