@@ -7,7 +7,8 @@ layout( local_size_x = 256 ) in;
 
 layout( push_constant ) uniform params {
     uint len;
-    uint stage; // 0 - multi scan, 1 - second scan
+    uint rewrite; // 0 - save in Result, 1 - save in Arr
+    //uint stage; // 0 - save Sums, 1 - don't save. equal len > array_part_size
 } PushConstant;
 
 layout(std430, binding = 0) buffer array
@@ -48,7 +49,7 @@ void main() {
 
     barrier();
 
-    if (PushConstant.stage == 0 && local_idx == array_part_size - 1) {
+    if (PushConstant.len > array_part_size && local_idx == array_part_size - 1) {
         Sums[idx] = temp_res[local_idx];
     }
 
@@ -68,6 +69,11 @@ void main() {
 
     barrier();
     if (local_idx < local_len) {
-        Result[left + local_idx] = temp_res[local_idx];
+        if (PushConstant.rewrite == 1) {
+            Arr[left + local_idx] = temp_res[local_idx];
+        }
+        else {
+            Result[left + local_idx] = temp_res[local_idx];
+        }
     }
 }
