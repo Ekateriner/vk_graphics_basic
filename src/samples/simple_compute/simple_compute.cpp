@@ -150,7 +150,7 @@ void SimpleCompute::SetupSimplePipeline()
   m_pCopyHelper->UpdateBuffer(m_Arr, 0, values.data(), sizeof(float) * values.size());
 }
 
-void SimpleCompute::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkPipeline a_pipeline)
+void SimpleCompute::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkPipeline)
 {
   vkResetCommandBuffer(a_cmdBuff, 0);
 
