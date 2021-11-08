@@ -10,12 +10,36 @@
 #include "../loader_utils/hydraxml.h"
 #include "../resources/shaders/common.h"
 
-struct InstanceInfo
+/*struct InstanceInfo
 {
   uint32_t inst_id = 0u;
   uint32_t mesh_id = 0u;
   VkDeviceSize instBufOffset = 0u;
   bool renderMark = false;
+};*/
+
+struct InstanceInfoWithMatrix
+{
+    LiteMath::float4x4 Matrix;
+    uint32_t inst_id = 0u;
+    uint32_t mesh_id = 0u;
+    //VkDeviceSize instBufOffset = 0u;
+    //int renderMark = 0;
+
+    char padding[8];
+};
+
+struct MeshInfoWithBbox
+{
+    LiteMath::Box4f m_meshBbox;
+    //uint32_t m_vertNum = 0;
+    uint32_t m_indNum  = 0;
+    uint32_t m_vertexOffset = 0u;
+    uint32_t m_indexOffset  = 0u;
+
+    //VkDeviceSize m_vertexBufOffset = 0u;
+    //VkDeviceSize m_indexBufOffset  = 0u;
+    char padding[4];
 };
 
 struct SceneManager
@@ -44,29 +68,31 @@ struct SceneManager
   VkBuffer GetVertexBuffer() const { return m_geoVertBuf; }
   VkBuffer GetIndexBuffer()  const { return m_geoIdxBuf; }
   VkBuffer GetMeshInfoBuffer()  const { return m_meshInfoBuf; }
+  VkBuffer GetInstanceInfoBuffer()  const { return m_instanceInfoBuf; }
   std::shared_ptr<vk_utils::ICopyEngine> GetCopyHelper() { return  m_pCopyHelper; }
 
   uint32_t MeshesNum() const {return (uint32_t)m_meshInfos.size();}
   uint32_t InstancesNum() const {return (uint32_t)m_instanceInfos.size();}
 
   hydra_xml::Camera GetCamera(uint32_t camId) const;
-  MeshInfo GetMeshInfo(uint32_t meshId) const {assert(meshId < m_meshInfos.size()); return m_meshInfos[meshId];}
-  LiteMath::Box4f GetMeshBbox(uint32_t meshId) const {assert(meshId < m_meshBboxes.size()); return m_meshBboxes[meshId];}
-  InstanceInfo GetInstanceInfo(uint32_t instId) const {assert(instId < m_instanceInfos.size()); return m_instanceInfos[instId];}
-  LiteMath::Box4f GetInstanceBbox(uint32_t instId) const {assert(instId < m_instanceBboxes.size()); return m_instanceBboxes[instId];}
-  LiteMath::float4x4 GetInstanceMatrix(uint32_t instId) const {assert(instId < m_instanceMatrices.size()); return m_instanceMatrices[instId];}
+  MeshInfoWithBbox GetMeshInfo(uint32_t meshId) const {assert(meshId < m_meshInfos.size()); return m_meshInfos[meshId];}
+  //const std::vector<MeshInfoWithBbox>& GetMeshInfos() const {return m_meshInfos;}
+  LiteMath::Box4f GetMeshBbox(uint32_t meshId) const {assert(meshId < m_meshInfos.size()); return m_meshInfos[meshId].m_meshBbox;}
+  InstanceInfoWithMatrix GetInstanceInfo(uint32_t instId) const {assert(instId < m_instanceInfos.size()); return m_instanceInfos[instId];}
+  //const std::vector<InstanceInfoWithMatrix> GetInstanceInfos() const {return m_instanceInfos;}
+  //LiteMath::Box4f GetInstanceBbox(uint32_t instId) const {assert(instId < m_instanceBboxes.size()); return m_instanceBboxes[instId];}
+  LiteMath::float4x4 GetInstanceMatrix(uint32_t instId) const {assert(instId < m_instanceInfos.size()); return m_instanceInfos[instId].Matrix;}
   LiteMath::Box4f GetSceneBbox() const {return sceneBbox;}
 
 private:
   void LoadGeoDataOnGPU();
 
-  std::vector<MeshInfo> m_meshInfos = {};
-  std::vector<LiteMath::Box4f> m_meshBboxes = {};
+  std::vector<MeshInfoWithBbox> m_meshInfos = {};
   std::shared_ptr<IMeshData> m_pMeshData = nullptr;
 
-  std::vector<InstanceInfo> m_instanceInfos = {};
-  std::vector<LiteMath::Box4f> m_instanceBboxes = {};
-  std::vector<LiteMath::float4x4> m_instanceMatrices = {};
+  std::vector<InstanceInfoWithMatrix> m_instanceInfos = {};
+  //std::vector<LiteMath::Box4f> m_instanceBboxes = {};
+  //std::vector<LiteMath::float4x4> m_instanceMatrices = {};
 
   std::vector<hydra_xml::Camera> m_sceneCameras = {};
   LiteMath::Box4f sceneBbox;
@@ -77,7 +103,8 @@ private:
   VkBuffer m_geoVertBuf = VK_NULL_HANDLE;
   VkBuffer m_geoIdxBuf  = VK_NULL_HANDLE;
   VkBuffer m_meshInfoBuf  = VK_NULL_HANDLE;
-  VkBuffer m_instanceMatricesBuffer = VK_NULL_HANDLE;
+  VkBuffer m_instanceInfoBuf  = VK_NULL_HANDLE;
+  //VkBuffer m_instanceMatricesBuffer = VK_NULL_HANDLE;
   VkDeviceMemory m_geoMemAlloc = VK_NULL_HANDLE;
 
   VkDevice m_device = VK_NULL_HANDLE;

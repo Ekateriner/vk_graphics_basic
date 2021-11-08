@@ -1,0 +1,125 @@
+#version 430
+
+const uint thread_count = 32;
+layout( local_size_x = 32 ) in;
+
+layout( push_constant ) uniform params {
+    mat4 mProjView;
+    uint instanceCount;
+} PushConstant;
+
+struct VkDrawIndexedIndirectCommand {
+    uint indexCount;
+    uint instanceCount;
+    uint firstIndex;
+    int vertexOffset;
+    uint firstInstance;
+};
+
+struct Box
+{
+    vec4 boxMin;
+    vec4 boxMax;
+};
+
+struct MeshInfoWithBbox
+{
+    Box m_meshBbox;
+    uint m_indNum;
+    uint m_vertexOffset;
+    uint m_indexOffset;
+    uint padding;
+};
+
+struct InstanceInfoWithMatrix
+{
+    mat4 Matrix;
+    uint inst_id;
+    uint mesh_id;
+};
+
+layout(std430, binding = 0) buffer comamnd_buf
+{
+    VkDrawIndexedIndirectCommand iicommand_buf[];
+};
+
+layout(std430, binding = 1) buffer mesh_buf
+{
+    MeshInfoWithBbox meshInfo_buf[];
+};
+
+layout(std430, binding = 2) buffer instance_buf
+{
+    InstanceInfoWithMatrix instanceInfo_buf[];
+};
+
+layout(std430, binding = 3) buffer to_draw_atomic
+{
+    uint matrices_buf_size;
+};
+
+layout(std430, binding = 4) buffer to_draw
+{
+    mat4 drawMatrices_buf[];
+};
+
+const uint size = 10000; // it hurts, it's sad
+shared uint local_drawIndex_buf[size];
+shared uint buf_size;
+shared uint start_idx;
+
+void main() {
+    Box mesh_box = meshInfo_buf[gl_WorkGroupID.x].m_meshBbox;
+    vec4 bbox_vert[8] = { vec4(mesh_box.boxMax.x, mesh_box.boxMax.y, mesh_box.boxMax.z, 1.0f),
+                          vec4(mesh_box.boxMax.x, mesh_box.boxMax.y, mesh_box.boxMin.z, 1.0f),
+                          vec4(mesh_box.boxMax.x, mesh_box.boxMin.y, mesh_box.boxMax.z, 1.0f),
+                          vec4(mesh_box.boxMax.x, mesh_box.boxMin.y, mesh_box.boxMin.z, 1.0f),
+                          vec4(mesh_box.boxMin.x, mesh_box.boxMax.y, mesh_box.boxMax.z, 1.0f),
+                          vec4(mesh_box.boxMin.x, mesh_box.boxMax.y, mesh_box.boxMin.z, 1.0f),
+                          vec4(mesh_box.boxMin.x, mesh_box.boxMin.y, mesh_box.boxMax.z, 1.0f),
+                          vec4(mesh_box.boxMin.x, mesh_box.boxMin.y, mesh_box.boxMin.z, 1.0f)};
+    buf_size = 0;
+
+    barrier();
+
+    for (uint i = 0; i < PushConstant.instanceCount + thread_count; i += thread_count) {
+        uint instance_idx = i + gl_LocalInvocationID.x;
+        if (instance_idx < PushConstant.instanceCount && instanceInfo_buf[instance_idx].mesh_id == gl_WorkGroupID.x) {
+            bool draw = false;
+
+            float size = 1.0f;
+            for(uint j = 0; j < 8; j++) {
+                vec4 proj = PushConstant.mProjView * instanceInfo_buf[instance_idx].Matrix * bbox_vert[j];
+                proj = proj / proj.w;
+
+                draw = draw || ((proj.x <= size) && (proj.x >= -size) &&
+                                (proj.y <= size) && (proj.y >= -size) &&
+                                (proj.z <= size) && (proj.z >= 0.0f));
+            }
+
+            if (draw) {
+                uint idx = atomicAdd(buf_size, 1);
+                local_drawIndex_buf[idx] = instance_idx;
+            }
+        }
+    }
+
+    barrier();
+    if (gl_LocalInvocationID.x == 0) {
+        start_idx = atomicAdd(matrices_buf_size, buf_size);
+
+        iicommand_buf[gl_WorkGroupID.x].indexCount = meshInfo_buf[gl_WorkGroupID.x].m_indNum;
+        iicommand_buf[gl_WorkGroupID.x].instanceCount = buf_size;
+        iicommand_buf[gl_WorkGroupID.x].firstIndex = meshInfo_buf[gl_WorkGroupID.x].m_indexOffset;
+        iicommand_buf[gl_WorkGroupID.x].vertexOffset = int(meshInfo_buf[gl_WorkGroupID.x].m_vertexOffset);
+        iicommand_buf[gl_WorkGroupID.x].firstInstance = start_idx;
+    }
+
+    barrier();
+    for(uint i = 0; i < buf_size + thread_count; i += thread_count) {
+        uint index = i + gl_LocalInvocationID.x;
+        if (index < buf_size) {
+            drawMatrices_buf[index + start_idx] = instanceInfo_buf[local_drawIndex_buf[index]].Matrix;
+        }
+    }
+}

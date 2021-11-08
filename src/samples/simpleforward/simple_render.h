@@ -20,6 +20,7 @@ class SimpleRender : public IRender
 public:
   const std::string VERTEX_SHADER_PATH = "../resources/shaders/simple.vert";
   const std::string FRAGMENT_SHADER_PATH = "../resources/shaders/simple.frag";
+  const std::string COMPUTE_SHADER_PATH = "../resources/shaders/frustum_cul.comp";
 
   SimpleRender(uint32_t a_width, uint32_t a_height);
   ~SimpleRender()  { Cleanup(); };
@@ -89,8 +90,18 @@ protected:
   struct
   {
     LiteMath::float4x4 projView;
-    LiteMath::float4x4 model;
-  } pushConst2M;
+    //LiteMath::float4x4 model;
+  } pushConst;
+
+  struct
+  {
+      LiteMath::float4x4 projView;
+      uint32_t instance_count;
+  } comp_pushConst;
+
+  VkBuffer iicommand_buffer;
+  VkBuffer drawAtomic_buffer;
+  VkBuffer drawMatrices_buffer;
 
   UniformParams m_uniforms {};
   VkBuffer m_ubo = VK_NULL_HANDLE;
@@ -98,10 +109,14 @@ protected:
   void* m_uboMappedMem = nullptr;
 
   pipeline_data_t m_basicForwardPipeline {};
+  pipeline_data_t m_computeForwardPipeline {};
 
   VkDescriptorSet m_dSet = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_dSetLayout = VK_NULL_HANDLE;
   VkRenderPass m_screenRenderPass = VK_NULL_HANDLE; // main renderpass
+
+  VkDescriptorSet m_comp_dSet = VK_NULL_HANDLE;
+  VkDescriptorSetLayout m_comp_dSetLayout = VK_NULL_HANDLE;
 
   std::shared_ptr<vk_utils::DescriptorMaker> m_pBindings = nullptr;
 
@@ -154,6 +169,5 @@ protected:
   void SetupDeviceExtensions();
   void SetupValidationLayers();
 };
-
 
 #endif //SIMPLE_RENDER_H

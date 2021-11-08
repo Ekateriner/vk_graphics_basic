@@ -145,25 +145,20 @@ uint32_t SceneManager::AddMeshFromData(cmesh::SimpleMesh &meshData)
 
   m_pMeshData->Append(meshData);
 
-  MeshInfo info;
-  info.m_vertNum = (uint32_t)meshData.VerticesNum();
+  MeshInfoWithBbox info;
   info.m_indNum  = (uint32_t)meshData.IndicesNum();
-
   info.m_vertexOffset = m_totalVertices;
   info.m_indexOffset  = m_totalIndices;
-
-  info.m_vertexBufOffset = info.m_vertexOffset * m_pMeshData->SingleVertexSize();
-  info.m_indexBufOffset  = info.m_indexOffset  * m_pMeshData->SingleIndexSize();
 
   m_totalVertices += (uint32_t)meshData.VerticesNum();
   m_totalIndices  += (uint32_t)meshData.IndicesNum();
 
-  m_meshInfos.push_back(info);
   Box4f meshBox;
   for (uint32_t i = 0; i < meshData.VerticesNum(); ++i) {
     meshBox.include(reinterpret_cast<float4*>(meshData.vPos4f.data())[i]);
   }
-  m_meshBboxes.push_back(meshBox);
+  info.m_meshBbox = meshBox;
+  m_meshInfos.push_back(info);
 
   return (uint32_t)m_meshInfos.size() - 1;
 }
@@ -173,33 +168,32 @@ uint32_t SceneManager::InstanceMesh(const uint32_t meshId, const LiteMath::float
   assert(meshId < m_meshInfos.size());
 
   //@TODO: maybe move
-  m_instanceMatrices.push_back(matrix);
+  //m_instanceMatrices.push_back(matrix);
 
-  InstanceInfo info;
-  info.inst_id       = (uint32_t)m_instanceMatrices.size() - 1;
+  InstanceInfoWithMatrix info;
+  info.inst_id       = (uint32_t)m_instanceInfos.size() - 1;
   info.mesh_id       = meshId;
-  info.renderMark    = markForRender;
-  info.instBufOffset = (m_instanceMatrices.size() - 1) * sizeof(matrix);
+  info.Matrix = matrix;
 
   m_instanceInfos.push_back(info);
 
   Box4f instBox;
   for (uint32_t i = 0; i < 8; ++i) {
     float4 corner = float4(
-      (i & 1) == 0 ? m_meshBboxes[meshId].boxMin.x : m_meshBboxes[meshId].boxMax.x,
-      (i & 2) == 0 ? m_meshBboxes[meshId].boxMin.y : m_meshBboxes[meshId].boxMax.y,
-      (i & 4) == 0 ? m_meshBboxes[meshId].boxMin.z : m_meshBboxes[meshId].boxMax.z,
+      (i & 1) == 0 ? m_meshInfos[meshId].m_meshBbox.boxMin.x : m_meshInfos[meshId].m_meshBbox.boxMax.x,
+      (i & 2) == 0 ? m_meshInfos[meshId].m_meshBbox.boxMin.y : m_meshInfos[meshId].m_meshBbox.boxMax.y,
+      (i & 4) == 0 ? m_meshInfos[meshId].m_meshBbox.boxMin.z : m_meshInfos[meshId].m_meshBbox.boxMax.z,
       1
     );
     instBox.include(matrix * corner);
   }
   sceneBbox.include(instBox);
-  m_instanceBboxes.push_back(instBox);
+  //m_instanceBboxes.push_back(instBox);
 
   return info.inst_id;
 }
 
-void SceneManager::MarkInstance(const uint32_t instId)
+/*void SceneManager::MarkInstance(const uint32_t instId)
 {
   assert(instId < m_instanceInfos.size());
   m_instanceInfos[instId].renderMark = true;
@@ -209,32 +203,36 @@ void SceneManager::UnmarkInstance(const uint32_t instId)
 {
   assert(instId < m_instanceInfos.size());
   m_instanceInfos[instId].renderMark = false;
-}
+}*/
 
 void SceneManager::LoadGeoDataOnGPU()
 {
   VkDeviceSize vertexBufSize = m_pMeshData->VertexDataSize();
   VkDeviceSize indexBufSize  = m_pMeshData->IndexDataSize();
-  VkDeviceSize infoBufSize   = m_meshInfos.size() * sizeof(uint32_t) * 2;
+  VkDeviceSize minfoBufSize   = m_meshInfos.size() * sizeof(MeshInfoWithBbox);
+  VkDeviceSize iinfoBufSize   = m_instanceInfos.size() * sizeof(InstanceInfoWithMatrix);
 
   m_geoVertBuf  = vk_utils::createBuffer(m_device, vertexBufSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   m_geoIdxBuf   = vk_utils::createBuffer(m_device, indexBufSize,  VK_BUFFER_USAGE_INDEX_BUFFER_BIT  | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-  m_meshInfoBuf = vk_utils::createBuffer(m_device, infoBufSize,   VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+  m_meshInfoBuf = vk_utils::createBuffer(m_device, minfoBufSize,   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+  m_instanceInfoBuf = vk_utils::createBuffer(m_device, iinfoBufSize,   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 
   VkMemoryAllocateFlags allocFlags {};
 
-  m_geoMemAlloc = vk_utils::allocateAndBindWithPadding(m_device, m_physDevice, {m_geoVertBuf, m_geoIdxBuf, m_meshInfoBuf}, allocFlags);
+  m_geoMemAlloc = vk_utils::allocateAndBindWithPadding(m_device, m_physDevice, {m_geoVertBuf, m_geoIdxBuf, m_meshInfoBuf, m_instanceInfoBuf}, allocFlags);
 
-  std::vector<LiteMath::uint2> mesh_info_tmp;
-  for(const auto& m : m_meshInfos)
-  {
-    mesh_info_tmp.emplace_back(m.m_indexOffset, m.m_vertexOffset);
-  }
+//  std::vector<LiteMath::uint2> mesh_info_tmp;
+//  for(const auto& m : m_meshInfos)
+//  {
+//    mesh_info_tmp.emplace_back(m.m_indexOffset, m.m_vertexOffset);
+//  }
+//  if(!mesh_info_tmp.empty())
+//    m_pCopyHelper->UpdateBuffer(m_meshInfoBuf,  0, mesh_info_tmp.data(), mesh_info_tmp.size() * sizeof(mesh_info_tmp[0]));
 
   m_pCopyHelper->UpdateBuffer(m_geoVertBuf, 0, m_pMeshData->VertexData(), vertexBufSize);
   m_pCopyHelper->UpdateBuffer(m_geoIdxBuf,  0, m_pMeshData->IndexData(), indexBufSize);
-  if(!mesh_info_tmp.empty())
-    m_pCopyHelper->UpdateBuffer(m_meshInfoBuf,  0, mesh_info_tmp.data(), mesh_info_tmp.size() * sizeof(mesh_info_tmp[0]));
+  m_pCopyHelper->UpdateBuffer(m_meshInfoBuf, 0, m_meshInfos.data(), minfoBufSize);
+  m_pCopyHelper->UpdateBuffer(m_instanceInfoBuf, 0, m_instanceInfos.data(), iinfoBufSize);
 }
 
 void SceneManager::DrawMarkedInstances()
@@ -262,10 +260,10 @@ void SceneManager::DestroyScene()
     m_meshInfoBuf = VK_NULL_HANDLE;
   }
 
-  if(m_instanceMatricesBuffer != VK_NULL_HANDLE)
+  if(m_instanceInfoBuf != VK_NULL_HANDLE)
   {
-    vkDestroyBuffer(m_device, m_instanceMatricesBuffer, nullptr);
-    m_instanceMatricesBuffer = VK_NULL_HANDLE;
+    vkDestroyBuffer(m_device, m_instanceInfoBuf, nullptr);
+    m_instanceInfoBuf = VK_NULL_HANDLE;
   }
 
   if(m_geoMemAlloc != VK_NULL_HANDLE)
@@ -279,5 +277,4 @@ void SceneManager::DestroyScene()
   m_meshInfos.clear();
   m_pMeshData = nullptr;
   m_instanceInfos.clear();
-  m_instanceMatrices.clear();
 }
