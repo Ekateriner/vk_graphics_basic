@@ -103,6 +103,7 @@ protected:
   VkBuffer iicommand_buffer;
   VkBuffer drawAtomic_buffer;
   VkBuffer drawMatrices_buffer;
+  VkDeviceMemory m_buffers_memory;
 
   UniformParams m_uniforms {};
   VkBuffer m_ubo = VK_NULL_HANDLE;
@@ -118,7 +119,6 @@ protected:
 
   VkDescriptorSet m_comp_dSet = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_comp_dSetLayout = VK_NULL_HANDLE;
-
   bool make_geom = true;
 
   std::shared_ptr<vk_utils::DescriptorMaker> m_pBindings = nullptr;

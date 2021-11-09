@@ -139,8 +139,8 @@ void SimpleRender::SetupSimplePipeline()
   drawMatrices_buffer = vk_utils::createBuffer(m_device,
                                                m_pScnMgr->InstancesNum() * sizeof(LiteMath::float4x4),
                                                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-  vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice,
-                                       {iicommand_buffer, drawAtomic_buffer, drawMatrices_buffer}, 0);
+  m_buffers_memory = vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice,
+                                                          {iicommand_buffer, drawAtomic_buffer, drawMatrices_buffer}, 0);
 
   // if we are recreating pipeline (for example, to reload shaders)
   // we need to cleanup old pipeline
@@ -350,6 +350,8 @@ void SimpleRender::CleanupPipelineAndSwapchain()
   vkDestroyBuffer(m_device, iicommand_buffer, nullptr);
   vkDestroyBuffer(m_device, drawAtomic_buffer, nullptr);
   vkDestroyBuffer(m_device, drawMatrices_buffer, nullptr);
+
+  vkFreeMemory(m_device, m_buffers_memory, nullptr);
 
   if (!m_cmdBuffersDrawMain.empty())
   {
