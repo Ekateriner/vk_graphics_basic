@@ -25,10 +25,15 @@ layout (location = 0 ) out VS_OUT
     vec3 wNorm;
     vec3 wTangent;
     vec2 texCoord;
-    vec3 color;
 } vOut;
 
-out gl_PerVertex { vec4 gl_Position; };
+out gl_PerVertex {
+    vec4 gl_Position;
+    float gl_PointSize;
+    float gl_ClipDistance[];
+    float gl_CullDistance[];
+};
+
 void main(void)
 {
     mat4 mModel = drawMatrices_buf[gl_InstanceIndex];
@@ -41,6 +46,4 @@ void main(void)
     vOut.texCoord = vTexCoordAndTang.xy;
 
     gl_Position   = params.mProjView * vec4(vOut.wPos, 1.0);
-
-    vOut.color = sin(vOut.wPos) / vOut.wNorm;
 }

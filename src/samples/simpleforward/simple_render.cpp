@@ -20,6 +20,7 @@ void SimpleRender::SetupDeviceFeatures()
   // m_enabledDeviceFeatures.fillModeNonSolid = VK_TRUE;
   m_enabledDeviceFeatures.drawIndirectFirstInstance = VK_TRUE;
   m_enabledDeviceFeatures.multiDrawIndirect = VK_TRUE;
+  m_enabledDeviceFeatures.geometryShader = VK_TRUE;
 }
 
 void SimpleRender::SetupDeviceExtensions()
@@ -133,21 +134,44 @@ void SimpleRender::SetupSimplePipeline()
                                            m_pScnMgr->MeshesNum() * sizeof(VkDrawIndexedIndirectCommand),
                                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
   drawAtomic_buffer = vk_utils::createBuffer(m_device,
-                                               sizeof(uint32_t),
-                                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+                                             sizeof(uint32_t),
+                                             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   drawMatrices_buffer = vk_utils::createBuffer(m_device,
                                                m_pScnMgr->InstancesNum() * sizeof(LiteMath::float4x4),
                                                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice,
                                        {iicommand_buffer, drawAtomic_buffer, drawMatrices_buffer}, 0);
 
-  std::vector<std::pair<VkDescriptorType, uint32_t> > dtypes = {
-          {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
-          {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 6}
-  };
+  // if we are recreating pipeline (for example, to reload shaders)
+  // we need to cleanup old pipeline
+  if(m_basicForwardPipeline.layout != VK_NULL_HANDLE)
+  {
+    vkDestroyPipelineLayout(m_device, m_basicForwardPipeline.layout, nullptr);
+    m_basicForwardPipeline.layout = VK_NULL_HANDLE;
+  }
+  if(m_basicForwardPipeline.pipeline != VK_NULL_HANDLE)
+  {
+    vkDestroyPipeline(m_device, m_basicForwardPipeline.pipeline, nullptr);
+    m_basicForwardPipeline.pipeline = VK_NULL_HANDLE;
+  }
+  if (m_computeForwardPipeline.pipeline != VK_NULL_HANDLE)
+  {
+    vkDestroyPipeline(m_device, m_computeForwardPipeline.pipeline, nullptr);
+    m_computeForwardPipeline.pipeline = VK_NULL_HANDLE;
+  }
+  if (m_computeForwardPipeline.layout != VK_NULL_HANDLE)
+  {
+    vkDestroyPipelineLayout(m_device, m_computeForwardPipeline.layout, nullptr);
+    m_computeForwardPipeline.layout = VK_NULL_HANDLE;
+  }
 
-  if(m_pBindings == nullptr)
-    m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 2);
+  if(m_pBindings == nullptr) {
+      std::vector<std::pair<VkDescriptorType, uint32_t> > dtypes = {
+              {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
+              {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 6}
+      };
+      m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 2);
+  }
 
   m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
   m_pBindings->BindBuffer(0, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
@@ -162,23 +186,13 @@ void SimpleRender::SetupSimplePipeline()
   m_pBindings->BindBuffer(4, drawMatrices_buffer);
   m_pBindings->BindEnd(&m_comp_dSet, &m_comp_dSetLayout);
 
-  // if we are recreating pipeline (for example, to reload shaders)
-  // we need to cleanup old pipeline
-  if(m_basicForwardPipeline.layout != VK_NULL_HANDLE)
-  {
-    vkDestroyPipelineLayout(m_device, m_basicForwardPipeline.layout, nullptr);
-    m_basicForwardPipeline.layout = VK_NULL_HANDLE;
-  }
-  if(m_basicForwardPipeline.pipeline != VK_NULL_HANDLE)
-  {
-    vkDestroyPipeline(m_device, m_basicForwardPipeline.pipeline, nullptr);
-    m_basicForwardPipeline.pipeline = VK_NULL_HANDLE;
-  }
-
   vk_utils::GraphicsPipelineMaker maker;
 
   std::unordered_map<VkShaderStageFlagBits, std::string> shader_paths;
   shader_paths[VK_SHADER_STAGE_FRAGMENT_BIT] = FRAGMENT_SHADER_PATH + ".spv";
+  if (make_geom) {
+      shader_paths[VK_SHADER_STAGE_GEOMETRY_BIT] = GEOMETRY_SHADER_PATH + ".spv";
+  }
   shader_paths[VK_SHADER_STAGE_VERTEX_BIT]   = VERTEX_SHADER_PATH + ".spv";
   maker.LoadShaders(m_device, shader_paths);
 
@@ -307,6 +321,8 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
                             &m_dSet, 0, VK_NULL_HANDLE);
 
     VkShaderStageFlags stageFlags = (VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    if(make_geom)
+        stageFlags = (stageFlags | VK_SHADER_STAGE_GEOMETRY_BIT);
 
     VkDeviceSize zero_offset = 0u;
     VkBuffer vertexBuf = m_pScnMgr->GetVertexBuffer();
@@ -518,6 +534,11 @@ void SimpleRender::ProcessInput(const AppInput &input)
     }
   }
 
+  if(input.keyPressed[GLFW_KEY_H])
+  {
+    make_geom = !make_geom;
+    SetupSimplePipeline();
+  }
 }
 
 void SimpleRender::UpdateCamera(const Camera* cams, uint32_t a_camsCount)
@@ -639,6 +660,8 @@ void SimpleRender::SetupGUIElements()
     ImGui::ColorEdit3("Meshes base color", m_uniforms.baseColor.M, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
     ImGui::Checkbox("Animate light source color", &m_uniforms.animateLightColor);
     ImGui::SliderFloat3("Light source position", m_uniforms.lightPos.M, -10.f, 10.f);
+    ImGui::Text("Press H to enable/disable hair in geometry shader");
+    //ImGui::Checkbox("Make hair in geometry shader", &make_geom);
 
     ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 

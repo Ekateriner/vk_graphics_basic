@@ -87,7 +87,7 @@ void main() {
         if (instance_idx < PushConstant.instanceCount && instanceInfo_buf[instance_idx].mesh_id == gl_WorkGroupID.x) {
             bool draw = false;
 
-            float size = 0.5f;
+            float size = 1.0f;
             for(uint j = 0; j < 8; j++) {
                 vec4 proj = PushConstant.mProjView * instanceInfo_buf[instance_idx].Matrix * bbox_vert[j];
                 proj = proj / proj.w;

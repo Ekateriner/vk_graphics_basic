@@ -21,6 +21,7 @@ public:
   const std::string VERTEX_SHADER_PATH = "../resources/shaders/simple.vert";
   const std::string FRAGMENT_SHADER_PATH = "../resources/shaders/simple.frag";
   const std::string COMPUTE_SHADER_PATH = "../resources/shaders/frustum_cul.comp";
+  const std::string GEOMETRY_SHADER_PATH = "../resources/shaders/hair.geom";
 
   SimpleRender(uint32_t a_width, uint32_t a_height);
   ~SimpleRender()  { Cleanup(); };
@@ -90,7 +91,7 @@ protected:
   struct
   {
     LiteMath::float4x4 projView;
-    //LiteMath::float4x4 model;
+    //uint32_t stage;
   } pushConst;
 
   struct
@@ -117,6 +118,8 @@ protected:
 
   VkDescriptorSet m_comp_dSet = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_comp_dSetLayout = VK_NULL_HANDLE;
+
+  bool make_geom = true;
 
   std::shared_ptr<vk_utils::DescriptorMaker> m_pBindings = nullptr;
 
