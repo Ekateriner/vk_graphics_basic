@@ -18,8 +18,11 @@
 class SimpleRender : public IRender
 {
 public:
-  const std::string VERTEX_SHADER_PATH = "../resources/shaders/simple.vert";
-  const std::string FRAGMENT_SHADER_PATH = "../resources/shaders/simple.frag";
+  const std::string VERTEX_SHADER_PATH_FILL = "../resources/shaders/g_buffer_fill.vert";
+  const std::string FRAGMENT_SHADER_PATH_FILL = "../resources/shaders/g_buffer_fill.frag";
+  const std::string VERTEX_SHADER_PATH_RESOLVE = "../resources/shaders/g_buffer_resolve.vert";
+  const std::string GEOMETRY_SHADER_PATH_RESOLVE = "../resources/shaders/g_buffer_resolve.geom";
+  const std::string FRAGMENT_SHADER_PATH_RESOLVE = "../resources/shaders/g_buffer_resolve.frag";
   const std::string COMPUTE_SHADER_PATH = "../resources/shaders/frustum_cul.comp";
   const std::string GEOMETRY_SHADER_PATH = "../resources/shaders/hair.geom";
 
@@ -110,11 +113,14 @@ protected:
   VkDeviceMemory m_uboAlloc = VK_NULL_HANDLE;
   void* m_uboMappedMem = nullptr;
 
-  pipeline_data_t m_basicForwardPipeline {};
+  pipeline_data_t m_fillForwardPipeline {};
+  pipeline_data_t m_resolveForwardPipeline {};
   pipeline_data_t m_computeForwardPipeline {};
 
-  VkDescriptorSet m_dSet = VK_NULL_HANDLE;
-  VkDescriptorSetLayout m_dSetLayout = VK_NULL_HANDLE;
+  VkDescriptorSet m_fill_dSet = VK_NULL_HANDLE;
+  VkDescriptorSetLayout m_fill_dSetLayout = VK_NULL_HANDLE;
+  VkDescriptorSet m_resolve_dSet = VK_NULL_HANDLE;
+  VkDescriptorSetLayout m_resolve_dSetLayout = VK_NULL_HANDLE;
   VkRenderPass m_screenRenderPass = VK_NULL_HANDLE; // main renderpass
 
   VkDescriptorSet m_comp_dSet = VK_NULL_HANDLE;
@@ -128,6 +134,10 @@ protected:
   VulkanSwapChain m_swapchain;
   std::vector<VkFramebuffer> m_frameBuffers;
   vk_utils::VulkanImageMem m_depthBuffer{};
+  vk_utils::VulkanImageMem m_normalBuffer{};
+  vk_utils::VulkanImageMem m_albedoBuffer{};
+  vk_utils::VulkanImageMem m_tangentBuffer{};
+  static constexpr uint32_t m_gbuf_size = 4;
   // ***
 
   // *** GUI
@@ -156,12 +166,14 @@ protected:
   void CreateInstance();
   void CreateDevice(uint32_t a_deviceId);
 
-  void BuildCommandBufferSimple(VkCommandBuffer cmdBuff, VkFramebuffer frameBuff,
-                                VkImageView a_targetImageView, VkPipeline a_pipeline);
+  void BuildCommandBufferSimple(VkCommandBuffer cmdBuff, VkFramebuffer frameBuff);
 
   virtual void SetupSimplePipeline();
   void CleanupPipelineAndSwapchain();
   void RecreateSwapChain();
+
+  void CreateRenderpass();
+  void CreateFrameBuffer();
 
   void CreateUniformBuffer();
   void UpdateUniformBuffer(float a_time);

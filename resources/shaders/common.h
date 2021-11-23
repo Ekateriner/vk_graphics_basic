@@ -23,8 +23,10 @@ struct UniformParams
 {
   mat4  lightMatrix;
   vec3  lightPos;
-  float time;
   vec3  baseColor;
+  float time;
+  float screenWidth;
+  float screenHeight;
   bool animateLightColor;
 };
 
