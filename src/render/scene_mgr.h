@@ -69,6 +69,7 @@ struct SceneManager
   void DrawMarkedInstances();
 
   void DestroyScene();
+  void UpdateGeoDataOnGPU();
 
   VkPipelineVertexInputStateCreateInfo GetPipelineVertexInputStateCreateInfo() { return m_pMeshData->VertexInputLayout();}
 
@@ -95,6 +96,7 @@ struct SceneManager
 
 private:
   void LoadGeoDataOnGPU();
+  void DestroyBuffers();
 
   std::vector<MeshInfoWithBbox> m_meshInfos = {};
   std::shared_ptr<IMeshData> m_pMeshData = nullptr;

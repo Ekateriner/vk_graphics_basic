@@ -244,13 +244,19 @@ void SceneManager::LoadGeoDataOnGPU()
   m_pCopyHelper->UpdateBuffer(m_lightInfoBuf, 0, m_lightInfos.data(), linfoBufSize);
 }
 
+void SceneManager::UpdateGeoDataOnGPU()
+{
+  DestroyBuffers();
+  LoadGeoDataOnGPU();
+}
+
+
 void SceneManager::DrawMarkedInstances()
 {
 
 }
 
-void SceneManager::DestroyScene()
-{
+void SceneManager::DestroyBuffers() {
   if(m_geoVertBuf != VK_NULL_HANDLE)
   {
     vkDestroyBuffer(m_device, m_geoVertBuf, nullptr);
@@ -286,6 +292,11 @@ void SceneManager::DestroyScene()
     vkFreeMemory(m_device, m_geoMemAlloc, nullptr);
     m_geoMemAlloc = VK_NULL_HANDLE;
   }
+}
+
+void SceneManager::DestroyScene()
+{
+  DestroyBuffers();
 
   m_pCopyHelper = nullptr;
 

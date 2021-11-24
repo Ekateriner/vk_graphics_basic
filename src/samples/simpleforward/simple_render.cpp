@@ -312,10 +312,10 @@ void SimpleRender::SetupSimplePipeline()
   if(m_pBindings == nullptr) {
       std::vector<std::pair<VkDescriptorType, uint32_t> > dtypes = {
               {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2},
-              {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10},
+              {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 7},
               {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 4}
       };
-      m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 2);
+      m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 4);
   }
 
   m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
