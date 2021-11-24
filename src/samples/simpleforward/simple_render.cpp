@@ -312,7 +312,7 @@ void SimpleRender::SetupSimplePipeline()
   if(m_pBindings == nullptr) {
       std::vector<std::pair<VkDescriptorType, uint32_t> > dtypes = {
               {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2},
-              {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 6},
+              {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10},
               {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 4}
       };
       m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 2);
@@ -329,6 +329,11 @@ void SimpleRender::SetupSimplePipeline()
   m_pBindings->BindImage(2, m_albedoBuffer.view, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT);
   m_pBindings->BindImage(3, m_tangentBuffer.view, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT);
   m_pBindings->BindEnd(&m_resolve_dSet, &m_resolve_dSetLayout);
+
+  m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
+  m_pBindings->BindBuffer(0, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+  m_pBindings->BindBuffer(1, m_pScnMgr->GetLightInfoBuffer());
+  m_pBindings->BindEnd(&m_light_dSet, &m_light_dSetLayout);
 
   m_pBindings->BindBegin(VK_SHADER_STAGE_COMPUTE_BIT);
   m_pBindings->BindBuffer(0, iicommand_buffer);
@@ -368,9 +373,20 @@ void SimpleRender::SetupSimplePipeline()
   shader_paths[VK_SHADER_STAGE_VERTEX_BIT]   = VERTEX_SHADER_PATH_RESOLVE + ".spv";
   maker.LoadShaders(m_device, shader_paths);
 
-  m_resolveForwardPipeline.layout = maker.MakeLayout(m_device, {m_fill_dSetLayout, m_resolve_dSetLayout}, sizeof(pushConst));
+  m_resolveForwardPipeline.layout = maker.MakeLayout(m_device, {m_light_dSetLayout, m_resolve_dSetLayout}, sizeof(resolveConst));
   maker.SetDefaultState(m_width, m_height);
   maker.depthStencilTest.depthTestEnable = false;
+  maker.colorBlendAttachments = {VkPipelineColorBlendAttachmentState{.blendEnable = VK_TRUE,
+                                                                     .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+                                                                     .dstColorBlendFactor = VK_BLEND_FACTOR_ONE,
+                                                                     .colorBlendOp = VK_BLEND_OP_ADD,
+                                                                     .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+                                                                     .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+                                                                     .alphaBlendOp = VK_BLEND_OP_ADD,
+                                                                     .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+                                                                                       VK_COLOR_COMPONENT_G_BIT |
+                                                                                       VK_COLOR_COMPONENT_B_BIT |
+                                                                                       VK_COLOR_COMPONENT_A_BIT}};
 
   m_resolveForwardPipeline.pipeline = maker.MakePipeline(m_device, m_pScnMgr->GetPipelineVertexInputStateCreateInfo(),
                                                          m_screenRenderPass, {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR}, vk_utils::IA_PList(), 1);
@@ -520,16 +536,16 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
 
     vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_resolveForwardPipeline.pipeline);
 
-    std::array<VkDescriptorSet, 2> dsets = {m_fill_dSet, m_resolve_dSet};
+    std::array<VkDescriptorSet, 2> dsets = {m_light_dSet, m_resolve_dSet};
     vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_resolveForwardPipeline.layout, 0, dsets.size(),
                             dsets.data(), 0, VK_NULL_HANDLE);
 
     stageFlags = (VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_GEOMETRY_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    vkCmdPushConstants(a_cmdBuff, m_fillForwardPipeline.layout, stageFlags, 0,
-                       sizeof(pushConst), &pushConst);
+    vkCmdPushConstants(a_cmdBuff, m_resolveForwardPipeline.layout, stageFlags, 0,
+                       sizeof(resolveConst), &resolveConst);
 
-    vkCmdDraw(a_cmdBuff, 1, 1, 0, 0);
+    vkCmdDraw(a_cmdBuff, 1, m_pScnMgr->LightsNum(), 0, 0);
 
     vkCmdEndRenderPass(a_cmdBuff);
   }
@@ -794,6 +810,8 @@ void SimpleRender::UpdateView()
   auto mLookAt         = LiteMath::lookAt(m_cam.pos, m_cam.lookAt, m_cam.up);
   auto mWorldViewProj  = mProjFix * mProj * mLookAt;
   pushConst.projView = mWorldViewProj;
+  resolveConst.Proj = mProjFix * mProj;
+  resolveConst.View = mLookAt;
 }
 
 void SimpleRender::LoadScene(const char* path, bool transpose_inst_matrices)

@@ -42,6 +42,13 @@ struct MeshInfoWithBbox
     char padding[4];
 };
 
+struct LightInfo
+{
+    float4 color;
+    float3 pos;
+    float radius;
+};
+
 struct SceneManager
 {
   SceneManager(VkDevice a_device, VkPhysicalDevice a_physDevice, uint32_t a_transferQId, uint32_t a_graphicsQId,
@@ -69,10 +76,12 @@ struct SceneManager
   VkBuffer GetIndexBuffer()  const { return m_geoIdxBuf; }
   VkBuffer GetMeshInfoBuffer()  const { return m_meshInfoBuf; }
   VkBuffer GetInstanceInfoBuffer()  const { return m_instanceInfoBuf; }
+  VkBuffer GetLightInfoBuffer()  const { return m_lightInfoBuf; }
   std::shared_ptr<vk_utils::ICopyEngine> GetCopyHelper() { return  m_pCopyHelper; }
 
   uint32_t MeshesNum() const {return (uint32_t)m_meshInfos.size();}
   uint32_t InstancesNum() const {return (uint32_t)m_instanceInfos.size();}
+  uint32_t LightsNum() const {return lightCount;}
 
   hydra_xml::Camera GetCamera(uint32_t camId) const;
   MeshInfoWithBbox GetMeshInfo(uint32_t meshId) const {assert(meshId < m_meshInfos.size()); return m_meshInfos[meshId];}
@@ -95,6 +104,8 @@ private:
   //std::vector<LiteMath::float4x4> m_instanceMatrices = {};
 
   std::vector<hydra_xml::Camera> m_sceneCameras = {};
+  std::vector<LightInfo> m_lightInfos = {};
+  uint32_t lightCount = 10;
   LiteMath::Box4f sceneBbox;
 
   uint32_t m_totalVertices = 0u;
@@ -104,6 +115,7 @@ private:
   VkBuffer m_geoIdxBuf  = VK_NULL_HANDLE;
   VkBuffer m_meshInfoBuf  = VK_NULL_HANDLE;
   VkBuffer m_instanceInfoBuf  = VK_NULL_HANDLE;
+  VkBuffer m_lightInfoBuf  = VK_NULL_HANDLE;
   //VkBuffer m_instanceMatricesBuffer = VK_NULL_HANDLE;
   VkDeviceMemory m_geoMemAlloc = VK_NULL_HANDLE;
 

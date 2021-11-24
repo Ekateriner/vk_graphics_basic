@@ -99,6 +99,12 @@ protected:
 
   struct
   {
+    LiteMath::float4x4 Proj;
+    LiteMath::float4x4 View;
+  } resolveConst;
+
+  struct
+  {
       LiteMath::float4x4 projView;
       uint32_t instance_count;
   } comp_pushConst;
@@ -121,11 +127,13 @@ protected:
   VkDescriptorSetLayout m_fill_dSetLayout = VK_NULL_HANDLE;
   VkDescriptorSet m_resolve_dSet = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_resolve_dSetLayout = VK_NULL_HANDLE;
+  VkDescriptorSet m_light_dSet = VK_NULL_HANDLE;
+  VkDescriptorSetLayout m_light_dSetLayout = VK_NULL_HANDLE;
   VkRenderPass m_screenRenderPass = VK_NULL_HANDLE; // main renderpass
 
   VkDescriptorSet m_comp_dSet = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_comp_dSetLayout = VK_NULL_HANDLE;
-  bool make_geom = true;
+  bool make_geom = false;
 
   std::shared_ptr<vk_utils::DescriptorMaker> m_pBindings = nullptr;
 

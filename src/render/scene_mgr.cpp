@@ -30,6 +30,12 @@ SceneManager::SceneManager(VkDevice a_device, VkPhysicalDevice a_physDevice,
   m_pCopyHelper = std::make_shared<vk_utils::PingPongCopyHelper>(m_physDevice, m_device, m_transferQ, m_transferQId, scratchMemSize);
   m_pMeshData   = std::make_shared<Mesh8F>();
 
+  for (uint32_t i = 0; i < lightCount / 2; i++)
+      for (uint32_t j = 0; j < lightCount / 2; j++)
+      m_lightInfos.push_back({to_float4(normalize(float3(abs(sin(i)), abs(sin(j)), abs(cos(i * j)))), 0.5f),
+                              float3(10 * i, 10 * j, 1.0),
+                              float(cos(i) * cos(i) + sin(j) * sin(j) / 10.0) });
+
 }
 
 bool SceneManager::LoadSceneXML(const std::string &scenePath, bool transpose)
@@ -208,18 +214,20 @@ void SceneManager::UnmarkInstance(const uint32_t instId)
 void SceneManager::LoadGeoDataOnGPU()
 {
   VkDeviceSize vertexBufSize = m_pMeshData->VertexDataSize();
-  VkDeviceSize indexBufSize  = m_pMeshData->IndexDataSize();
-  VkDeviceSize minfoBufSize   = m_meshInfos.size() * sizeof(MeshInfoWithBbox);
-  VkDeviceSize iinfoBufSize   = m_instanceInfos.size() * sizeof(InstanceInfoWithMatrix);
+  VkDeviceSize indexBufSize = m_pMeshData->IndexDataSize();
+  VkDeviceSize minfoBufSize = m_meshInfos.size() * sizeof(MeshInfoWithBbox);
+  VkDeviceSize iinfoBufSize = m_instanceInfos.size() * sizeof(InstanceInfoWithMatrix);
+  VkDeviceSize linfoBufSize = m_lightInfos.size() * sizeof(LightInfo);
 
   m_geoVertBuf  = vk_utils::createBuffer(m_device, vertexBufSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   m_geoIdxBuf   = vk_utils::createBuffer(m_device, indexBufSize,  VK_BUFFER_USAGE_INDEX_BUFFER_BIT  | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   m_meshInfoBuf = vk_utils::createBuffer(m_device, minfoBufSize,   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+  m_lightInfoBuf = vk_utils::createBuffer(m_device, linfoBufSize,   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   m_instanceInfoBuf = vk_utils::createBuffer(m_device, iinfoBufSize,   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 
   VkMemoryAllocateFlags allocFlags {};
 
-  m_geoMemAlloc = vk_utils::allocateAndBindWithPadding(m_device, m_physDevice, {m_geoVertBuf, m_geoIdxBuf, m_meshInfoBuf, m_instanceInfoBuf}, allocFlags);
+  m_geoMemAlloc = vk_utils::allocateAndBindWithPadding(m_device, m_physDevice, {m_geoVertBuf, m_geoIdxBuf, m_meshInfoBuf, m_instanceInfoBuf, m_lightInfoBuf}, allocFlags);
 
 //  std::vector<LiteMath::uint2> mesh_info_tmp;
 //  for(const auto& m : m_meshInfos)
@@ -233,6 +241,7 @@ void SceneManager::LoadGeoDataOnGPU()
   m_pCopyHelper->UpdateBuffer(m_geoIdxBuf,  0, m_pMeshData->IndexData(), indexBufSize);
   m_pCopyHelper->UpdateBuffer(m_meshInfoBuf, 0, m_meshInfos.data(), minfoBufSize);
   m_pCopyHelper->UpdateBuffer(m_instanceInfoBuf, 0, m_instanceInfos.data(), iinfoBufSize);
+  m_pCopyHelper->UpdateBuffer(m_lightInfoBuf, 0, m_lightInfos.data(), linfoBufSize);
 }
 
 void SceneManager::DrawMarkedInstances()
@@ -266,6 +275,12 @@ void SceneManager::DestroyScene()
     m_instanceInfoBuf = VK_NULL_HANDLE;
   }
 
+  if(m_lightInfoBuf != VK_NULL_HANDLE)
+  {
+    vkDestroyBuffer(m_device, m_lightInfoBuf, nullptr);
+    m_lightInfoBuf = VK_NULL_HANDLE;
+  }
+
   if(m_geoMemAlloc != VK_NULL_HANDLE)
   {
     vkFreeMemory(m_device, m_geoMemAlloc, nullptr);
@@ -277,4 +292,5 @@ void SceneManager::DestroyScene()
   m_meshInfos.clear();
   m_pMeshData = nullptr;
   m_instanceInfos.clear();
+  m_lightInfos.clear();
 }

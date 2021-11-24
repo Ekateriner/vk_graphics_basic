@@ -6,10 +6,17 @@
 
 layout(push_constant) uniform params_t
 {
-    mat4 mProjView;
+    mat4 mProj;
+    mat4 mView;
 } params;
+
+layout (location = 0) out VS_OUT
+{
+    uint light_ind;
+} vOut;
 
 void main(void)
 {
+    vOut.light_ind = gl_InstanceIndex.x;
     gl_Position = vec4(0.0f, 0.0f, 0.0f, 1.0f);
 }

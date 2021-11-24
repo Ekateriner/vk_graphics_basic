@@ -11,9 +11,26 @@ layout(binding = 0, set = 0) uniform AppData
     UniformParams Params;
 };
 
+struct LightInfo{
+    vec4 lightColor;
+    vec3 lightPos;
+    float radius;
+};
+
+layout(binding = 1, set = 0) buffer light_buf
+{
+    LightInfo lInfos[];
+};
+
+layout (location = 0) in GS_OUT
+{
+    uint light_ind;
+} gOut;
+
 layout(push_constant) uniform params_t
 {
-    mat4 mProjView;
+    mat4 mProj;
+    mat4 mView;
 } params;
 
 layout (input_attachment_index = 0, set = 1, binding = 0) uniform subpassInput inputDepth;
@@ -27,19 +44,17 @@ void main()
     vec3 Color = subpassLoad(inputAlbedo).rgb;
     vec3 Tangent = subpassLoad(inputTangent).rgb;
 
-    vec4 camPos = inverse(params.mProjView) * vec4(2.0 * gl_FragCoord.xy / vec2(Params.screenWidth, Params.screenHeight) - 1, subpassLoad(inputDepth).r, 1.0f);
+    //  / vec2(Params.screenWidth, Params.screenHeight)
+
+    vec4 camPos = inverse(params.mProj) * vec4(2.0 * gl_FragCoord.xy - 1,
+                                               subpassLoad(inputDepth).r, 1.0f);
     vec3 Pos = camPos.xyz / camPos.w;
 
-    vec3 lightDir = normalize(Params.lightPos - Pos);
+    vec3 lightDir = normalize(vec3(params.mView * vec4(lInfos[gOut.light_ind].lightPos, 1.0f)) - Pos);
+    vec4 lightColor = max(dot(Normal, lightDir), 0.0f) * lInfos[gOut.light_ind].lightColor;
 
-    const vec4 dark_violet = vec4(0.59f, 0.0f, 0.82f, 1.0f);
-    const vec4 chartreuse  = vec4(0.5f, 1.0f, 0.0f, 1.0f);
-
-    vec4 lightColor = mix(dark_violet, chartreuse, 0.5f);
-    if(Params.animateLightColor)
-        lightColor = mix(dark_violet, chartreuse, abs(sin(Params.time)));
-
-    lightColor = max(dot(Normal, lightDir), 0.0f) * lightColor;
+    //vec3 lightDir = normalize(Params.lightPos - Pos);
+    //vec4 lightColor = max(dot(Normal, lightDir), 0.0f) * vec4(0.59f, 0.0f, 0.82f, 1.0f);
 
     out_fragColor = lightColor * vec4(subpassLoad(inputAlbedo).rgb, 1.0f);
 }
