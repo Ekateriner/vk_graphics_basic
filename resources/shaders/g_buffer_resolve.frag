@@ -22,10 +22,7 @@ layout(binding = 1, set = 0) buffer light_buf
     LightInfo lInfos[];
 };
 
-layout (location = 0) in GS_OUT
-{
-    uint light_ind;
-} gOut;
+layout (location = 0) in flat uint light_ind;
 
 layout(push_constant) uniform params_t
 {
@@ -38,23 +35,39 @@ layout (input_attachment_index = 1, set = 1, binding = 1) uniform subpassInput i
 layout (input_attachment_index = 2, set = 1, binding = 2) uniform subpassInput inputAlbedo;
 layout (input_attachment_index = 3, set = 1, binding = 3) uniform subpassInput inputTangent;
 
+const float lightSize = 0.1;
+
+float pow2 (float x) {
+    return x * x;
+}
+
 void main()
 {
     vec3 Normal = subpassLoad(inputNormal).rgb;
     vec3 Color = subpassLoad(inputAlbedo).rgb;
     vec3 Tangent = subpassLoad(inputTangent).rgb;
 
-    //  / vec2(Params.screenWidth, Params.screenHeight)
+    LightInfo li = lInfos[light_ind];
 
-    vec4 camPos = inverse(params.mProj) * vec4(2.0 * gl_FragCoord.xy - 1,
+    //  / vec2(Params.screenWidth, Params.screenHeight)
+    vec4 camPos = inverse(params.mProj) * vec4(2.0 * gl_FragCoord.xy / vec2(Params.screenWidth, Params.screenHeight) - 1,
                                                subpassLoad(inputDepth).r, 1.0f);
     vec3 Pos = camPos.xyz / camPos.w;
 
-    vec3 lightDir = normalize(vec3(params.mView * vec4(lInfos[gOut.light_ind].lightPos, 1.0f)) - Pos);
-    vec4 lightColor = max(dot(Normal, lightDir), 0.0f) * lInfos[gOut.light_ind].lightColor;
+    vec3 lightDir = (params.mView * vec4(li.lightPos, 1.0f)).xyz - Pos;
+    li.lightPos.xy = gl_FragCoord.xy;
 
-    //vec3 lightDir = normalize(Params.lightPos - Pos);
-    //vec4 lightColor = max(dot(Normal, lightDir), 0.0f) * vec4(0.59f, 0.0f, 0.82f, 1.0f);
+    // красивый затухающий свет
+    float lightDist2 = dot(lightDir, lightDir);
+    lightDir = normalize(lightDir);
 
-    out_fragColor = lightColor * vec4(subpassLoad(inputAlbedo).rgb, 1.0f);
+    float lightRadiusMin2 = lightSize * lightSize;
+    float lightRadiusMax2 = li.radius * li.radius;
+
+    float lightSampleDist = mix(lightRadiusMin2, lightRadiusMax2, 0.05);
+    float attenuation = lightSampleDist / max(lightRadiusMin2, lightDist2) * pow2(max(1 - pow2(lightDist2 / lightRadiusMax2), 0));
+
+    vec3 lightDiffuse = max(dot(Normal, lightDir), 0.0f) * li.lightColor.rgb;
+
+    out_fragColor = vec4(lightDiffuse * subpassLoad(inputAlbedo).rgb, attenuation);
 }

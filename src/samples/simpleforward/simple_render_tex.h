@@ -22,6 +22,10 @@ public:
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 protected:
 
+  struct {
+    LiteMath::float4x4 projView;
+  } pushConst;
+
   bool m_textureNeedsReload = false;
   std::string m_texturePath = "../resources/textures/test_tex_1.png";
 

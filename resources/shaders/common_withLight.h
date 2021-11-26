@@ -1,5 +1,5 @@
-#ifndef VK_GRAPHICS_BASIC_COMMON_H
-#define VK_GRAPHICS_BASIC_COMMON_H
+#ifndef VK_GRAPHICS_BASIC_COMMON_WITHLIGHT_H
+#define VK_GRAPHICS_BASIC_COMMON_WITHLIGHT_H
 
 #ifdef __cplusplus
 #include <LiteMath.h>
@@ -19,13 +19,13 @@ typedef float2       vec2;
 typedef float4x4     mat4;
 #endif
 
-struct UniformParams
+struct UniformParamsL
 {
-  vec3  baseColor;
-  uint screenWidth;
-  uint screenHeight;
-  float time;
-  bool animateLightColor;
+    mat4  lightMatrix;
+    vec3  lightPos;
+    vec3  baseColor;
+    float time;
+    bool animateLightColor;
 };
 
-#endif //VK_GRAPHICS_BASIC_COMMON_H
+#endif //VK_GRAPHICS_BASIC_COMMON_WITHLIGHT_H

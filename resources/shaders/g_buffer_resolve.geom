@@ -30,15 +30,16 @@ layout(push_constant) uniform params_t
 } params;
 
 
-layout (location = 0) in VS_OUT
-{
-    uint light_ind;
-} vOut[];
+layout (location = 0) in flat uint v_light_ind[];
 
-layout (location = 0) out GS_OUT
-{
-    uint light_ind;
-} gOut;
+layout (location = 0) out flat uint light_ind;
+
+out gl_PerVertex {
+    vec4 gl_Position;
+    float gl_PointSize;
+    float gl_ClipDistance[];
+    float gl_CullDistance[];
+};
 
 vec3 proj (vec3 orig, vec3 base) {
     return base * dot(orig, base) / dot(base, base);
@@ -54,19 +55,23 @@ void GramShmidt(inout vec3 A, inout vec3 B, inout vec3 C){
 }
 
 void main() {
-    gOut.light_ind = vOut[0].light_ind;
-    LightInfo li = lInfos[gOut.light_ind];
+    light_ind = v_light_ind[0];
+    LightInfo li = lInfos[light_ind];
     vec3 center = vec3(params.mView * vec4(li.lightPos, 1.0f));
 
-    if(length(center) < li.radius) // inner
+    if (length(center) < li.radius) // inner
     {
-        gl_Position = vec4(-1.0f, -1.0f, 0.5f, 1.0f);
+        gl_Position = vec4(-1.0f, -1.0f, 1.0f, 1.0f);
+        light_ind = v_light_ind[0];
         EmitVertex();
-        gl_Position = vec4(-1.0f, 1.0f, 0.5f, 1.0f);
+        gl_Position = vec4(-1.0f, 1.0f, 1.0f, 1.0f);
+        light_ind = v_light_ind[0];
         EmitVertex();
-        gl_Position = vec4(1.0f, -1.0f, 0.5f, 1.0f);
+        gl_Position = vec4(1.0f, -1.0f, 1.0f, 1.0f);
+        light_ind = v_light_ind[0];
         EmitVertex();
-        gl_Position = vec4(1.0f, 1.0f, 0.5f, 1.0f);
+        gl_Position = vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        light_ind = v_light_ind[0];
         EmitVertex();
         EndPrimitive();
     }
@@ -91,6 +96,7 @@ void main() {
         for (uint i = 0; i < 4; ++i)
         {
             gl_Position = params.mProj * vec4(forward + forward*li.radius + quad[i]*radius2, 1.0);
+            light_ind = v_light_ind[0];
             EmitVertex();
         }
 

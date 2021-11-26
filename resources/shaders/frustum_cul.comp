@@ -82,22 +82,33 @@ void main() {
 
     barrier();
 
-    for (uint i = 0; i < PushConstant.instanceCount + thread_count; i += thread_count) {
+    for (uint i = 0; i < PushConstant.instanceCount; i += thread_count) {
         uint instance_idx = i + gl_LocalInvocationID.x;
         if (instance_idx < PushConstant.instanceCount && instanceInfo_buf[instance_idx].mesh_id == gl_WorkGroupID.x) {
-            bool draw = false;
+            bool left = true;
+            bool right = true;
+            bool up = true;
+            bool down = true;
+            bool forward = true;
+            bool behind = true;
 
             float size = 1.0f;
+
             for(uint j = 0; j < 8; j++) {
                 vec4 proj = PushConstant.mProjView * instanceInfo_buf[instance_idx].Matrix * bbox_vert[j];
-                proj = proj / proj.w;
+                proj = proj / abs(proj.w);
 
-                draw = draw || ((proj.x <= size) && (proj.x >= -size) &&
-                                (proj.y <= size) && (proj.y >= -size) &&
-                                (proj.z <= 1.0f) && (proj.z >= 0.0f));
+                left = left && (proj.y < -size);
+                right = right && (proj.y > size);
+
+                forward = left && (proj.x < -size);
+                behind = right && (proj.x > size);
+
+                down = down && (proj.z < 0.0);
+                up = up && (proj.z > 1.0);
             }
 
-            if (draw) {
+            if (!left && !right && !up && !down && !behind && !forward) {
                 uint idx = atomicAdd(buf_size, 1);
                 local_drawIndex_buf[idx] = instance_idx;
             }
@@ -116,7 +127,7 @@ void main() {
     }
 
     barrier();
-    for(uint i = 0; i < buf_size + thread_count; i += thread_count) {
+    for(uint i = 0; i < buf_size; i += thread_count) {
         uint index = i + gl_LocalInvocationID.x;
         if (index < buf_size) {
             drawMatrices_buf[index + start_idx] = instanceInfo_buf[local_drawIndex_buf[index]].Matrix;

@@ -353,7 +353,7 @@ void SimpleRender::SetupSimplePipeline()
   shader_paths[VK_SHADER_STAGE_VERTEX_BIT]   = VERTEX_SHADER_PATH_FILL + ".spv";
   maker.LoadShaders(m_device, shader_paths);
 
-  m_fillForwardPipeline.layout = maker.MakeLayout(m_device, {m_fill_dSetLayout}, sizeof(pushConst));
+  m_fillForwardPipeline.layout = maker.MakeLayout(m_device, {m_fill_dSetLayout}, sizeof(resolveConst));
   maker.SetDefaultState(m_width, m_height);
 
   std::array<VkPipelineColorBlendAttachmentState, m_gbuf_size - 1> blendStates{};
@@ -380,13 +380,9 @@ void SimpleRender::SetupSimplePipeline()
                                                                      .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
                                                                      .dstColorBlendFactor = VK_BLEND_FACTOR_ONE,
                                                                      .colorBlendOp = VK_BLEND_OP_ADD,
-                                                                     .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-                                                                     .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-                                                                     .alphaBlendOp = VK_BLEND_OP_ADD,
                                                                      .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
                                                                                        VK_COLOR_COMPONENT_G_BIT |
-                                                                                       VK_COLOR_COMPONENT_B_BIT |
-                                                                                       VK_COLOR_COMPONENT_A_BIT}};
+                                                                                       VK_COLOR_COMPONENT_B_BIT}};
 
   m_resolveForwardPipeline.pipeline = maker.MakePipeline(m_device, m_pScnMgr->GetPipelineVertexInputStateCreateInfo(),
                                                          m_screenRenderPass, {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR}, vk_utils::IA_PList(), 1);
@@ -401,7 +397,7 @@ void SimpleRender::SetupSimplePipeline()
 void SimpleRender::CreateUniformBuffer()
 {
   VkMemoryRequirements memReq;
-  m_ubo = vk_utils::createBuffer(m_device, sizeof(UniformParams), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &memReq);
+  m_ubo = vk_utils::createBuffer(m_device, sizeof(m_uniforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &memReq);
 
   VkMemoryAllocateInfo allocateInfo = {};
   allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -411,16 +407,14 @@ void SimpleRender::CreateUniformBuffer()
                                                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                                           VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                                           m_physicalDevice);
-  VK_CHECK_RESULT(vkAllocateMemory(m_device, &allocateInfo, nullptr, &m_uboAlloc));
+  VK_CHECK_RESULT(vkAllocateMemory(m_device, &allocateInfo, nullptr, &m_uboAlloc))
 
   VK_CHECK_RESULT(vkBindBufferMemory(m_device, m_ubo, m_uboAlloc, 0));
 
   vkMapMemory(m_device, m_uboAlloc, 0, sizeof(m_uniforms), 0, &m_uboMappedMem);
 
-  m_uniforms.lightPos = LiteMath::float3(0.0f, 1.0f, 1.0f);
+  //m_uniforms.lightPos = LiteMath::float3(0.0f, 1.0f, 1.0f);
   m_uniforms.baseColor = LiteMath::float3(0.9f, 0.92f, 1.0f);
-  m_uniforms.screenHeight = m_height;
-  m_uniforms.screenWidth = m_width;
   m_uniforms.animateLightColor = true;
 
   UpdateUniformBuffer(0.0f);
@@ -430,6 +424,8 @@ void SimpleRender::UpdateUniformBuffer(float a_time)
 {
 // most uniforms are updated in GUI -> SetupGUIElements()
   m_uniforms.time = a_time;
+  m_uniforms.screenHeight = m_height;
+  m_uniforms.screenWidth = m_width;
   memcpy(m_uboMappedMem, &m_uniforms, sizeof(m_uniforms));
 }
 
@@ -460,7 +456,6 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
   vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, m_computeForwardPipeline.layout, 0, 1,
                           &m_comp_dSet, 0, VK_NULL_HANDLE);
   comp_pushConst.instance_count = m_pScnMgr->InstancesNum();
-  comp_pushConst.projView = pushConst.projView;
   vkCmdPushConstants(a_cmdBuff, m_computeForwardPipeline.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(comp_pushConst),
                      &comp_pushConst);
   vkCmdDispatch(a_cmdBuff, m_pScnMgr->MeshesNum(), 1, 1);
@@ -526,7 +521,7 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
     vkCmdBindIndexBuffer(a_cmdBuff, indexBuf, 0, VK_INDEX_TYPE_UINT32);
 
     vkCmdPushConstants(a_cmdBuff, m_fillForwardPipeline.layout, stageFlags, 0,
-                       sizeof(pushConst), &pushConst);
+                       sizeof(resolveConst), &resolveConst);
 
     vkCmdDrawIndexedIndirect(a_cmdBuff, iicommand_buffer, 0,
                              m_pScnMgr->MeshesNum(),
@@ -809,7 +804,7 @@ void SimpleRender::UpdateView()
   auto mProj           = projectionMatrix(m_cam.fov, aspect, 0.1f, 1000.0f);
   auto mLookAt         = LiteMath::lookAt(m_cam.pos, m_cam.lookAt, m_cam.up);
   auto mWorldViewProj  = mProjFix * mProj * mLookAt;
-  pushConst.projView = mWorldViewProj;
+  comp_pushConst.projView = mWorldViewProj;
   resolveConst.Proj = mProjFix * mProj;
   resolveConst.View = mLookAt;
 }
@@ -913,7 +908,7 @@ void SimpleRender::SetupGUIElements()
 
     ImGui::ColorEdit3("Meshes base color", m_uniforms.baseColor.M, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
     ImGui::Checkbox("Animate light source color", &m_uniforms.animateLightColor);
-    ImGui::SliderFloat3("Light source position", m_uniforms.lightPos.M, -10.f, 10.f);
+    //ImGui::SliderFloat3("Light source position", m_uniforms.lightPos.M, -10.f, 10.f);
     ImGui::Text("Press H to enable/disable hair in geometry shader");
     //ImGui::Checkbox("Make hair in geometry shader", &make_geom);
 

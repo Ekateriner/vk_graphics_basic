@@ -15,16 +15,16 @@ layout(std430, binding = 1) buffer to_draw
 
 layout(push_constant) uniform params_t
 {
-    mat4 mProjView;
+    mat4 mProj;
+    mat4 mView;
 } params;
 
 
 layout (location = 0 ) out VS_OUT
 {
-    vec3 wPos;
-    vec3 wNorm;
-    vec3 wTangent;
-    vec2 texCoord;
+    vec3 Norm;
+    vec3 Tangent;
+    //vec2 texCoord;
 } vOut;
 
 out gl_PerVertex {
@@ -36,14 +36,13 @@ out gl_PerVertex {
 
 void main(void)
 {
-    mat4 mModel = drawMatrices_buf[gl_InstanceIndex];
-    const vec4 wNorm = vec4(DecodeNormal(floatBitsToInt(vPosNorm.w)),         0.0f);
-    const vec4 wTang = vec4(DecodeNormal(floatBitsToInt(vTexCoordAndTang.z)), 0.0f);
+    mat4 mModel = params.mView * drawMatrices_buf[gl_InstanceIndex];
+    const vec4 Norm = vec4(DecodeNormal(floatBitsToInt(vPosNorm.w)),         0.0f);
+    const vec4 Tang = vec4(DecodeNormal(floatBitsToInt(vTexCoordAndTang.z)), 0.0f);
 
-    vOut.wPos     = (mModel * vec4(vPosNorm.xyz, 1.0f)).xyz;
-    vOut.wNorm    = normalize(mat3(transpose(inverse(mModel))) * wNorm.xyz);
-    vOut.wTangent = normalize(mat3(transpose(inverse(mModel))) * wTang.xyz);
-    vOut.texCoord = vTexCoordAndTang.xy;
+    //vOut.Pos     = (mModel * vec4(vPosNorm.xyz, 1.0f)).xyz;
+    vOut.Norm    = normalize(mat3(transpose(inverse(mModel))) * Norm.xyz);
+    vOut.Tangent = normalize(mat3(transpose(inverse(mModel))) * Tang.xyz);
 
-    gl_Position   = params.mProjView * vec4(vOut.wPos, 1.0);
+    gl_Position   = params.mProj * mModel * vec4(vPosNorm.xyz, 1.0f);
 }

@@ -6,7 +6,7 @@
 #include "../../render/scene_mgr.h"
 #include "../../render/render_common.h"
 #include "../../render/render_gui.h"
-#include "../../../resources/shaders/common.h"
+#include "../../../resources/shaders/common_withLight.h"
 #include <geom/vk_mesh.h>
 #include <vk_descriptor_sets.h>
 #include <vk_fbuf_attachment.h>
@@ -104,7 +104,7 @@ protected:
   VkBuffer drawMatrices_buffer;
   VkDeviceMemory m_buffers_memory;
 
-  UniformParams m_uniforms {};
+  UniformParamsL m_uniforms {};
   VkBuffer m_ubo = VK_NULL_HANDLE;
   VkDeviceMemory m_uboAlloc = VK_NULL_HANDLE;
   void* m_uboMappedMem = nullptr;

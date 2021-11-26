@@ -93,12 +93,6 @@ protected:
 
   struct
   {
-    LiteMath::float4x4 projView;
-    //uint32_t stage;
-  } pushConst;
-
-  struct
-  {
     LiteMath::float4x4 Proj;
     LiteMath::float4x4 View;
   } resolveConst;

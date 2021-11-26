@@ -10,10 +10,9 @@ layout(location = 2) out vec4 out_tangentColor;
 
 layout (location = 0 ) in VS_OUT
 {
-    vec3 wPos;
-    vec3 wNorm;
-    vec3 wTangent;
-    vec2 texCoord;
+    vec3 Norm;
+    vec3 Tangent;
+    //vec2 texCoord;
 } surf;
 
 layout(binding = 0, set = 0) uniform AppData
@@ -23,7 +22,7 @@ layout(binding = 0, set = 0) uniform AppData
 
 void main()
 {
-    out_normalColor = vec4(surf.wNorm, 1.0f);
+    out_normalColor = vec4(surf.Norm, 1.0f);
     out_albedoColor = vec4(Params.baseColor, 1.0f);
-    out_tangentColor = vec4(surf.wTangent, 1.0f);
+    out_tangentColor = vec4(surf.Tangent, 1.0f);
 }

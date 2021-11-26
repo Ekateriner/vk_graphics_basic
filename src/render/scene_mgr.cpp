@@ -3,6 +3,7 @@
 #include "scene_mgr.h"
 #include "vk_utils.h"
 #include "vk_buffers.h"
+//#include <random>
 #include "../loader_utils/hydraxml.h"
 
 
@@ -30,11 +31,19 @@ SceneManager::SceneManager(VkDevice a_device, VkPhysicalDevice a_physDevice,
   m_pCopyHelper = std::make_shared<vk_utils::PingPongCopyHelper>(m_physDevice, m_device, m_transferQ, m_transferQId, scratchMemSize);
   m_pMeshData   = std::make_shared<Mesh8F>();
 
-  for (uint32_t i = 0; i < lightCount / 2; i++)
-      for (uint32_t j = 0; j < lightCount / 2; j++)
-      m_lightInfos.push_back({to_float4(normalize(float3(abs(sin(i)), abs(sin(j)), abs(cos(i * j)))), 0.5f),
-                              float3(10 * i, 10 * j, 1.0),
-                              float(cos(i) * cos(i) + sin(j) * sin(j) / 10.0) });
+
+
+  m_lightInfos.push_back({float4(1.0, 0.7, 0.4, 0.3),
+                          float3(50.0, 50.0, 50.0),
+                          float(200.0) });
+
+  for (uint32_t i = 0; i < lightGridSize; i++)
+    for (uint32_t j = 0; j < lightGridSize; j++)
+      m_lightInfos.push_back({float4(abs(cos(i)) / 2.0, abs(cos(j)) / 2.0, 0.5, 0.3f),
+                              float3(10 * i, 5.0, j * 10),
+                              float(15.5 + i) });
+
+  lightCount = m_lightInfos.size();
 
 }
 
@@ -177,7 +186,7 @@ uint32_t SceneManager::InstanceMesh(const uint32_t meshId, const LiteMath::float
   //m_instanceMatrices.push_back(matrix);
 
   InstanceInfoWithMatrix info;
-  info.inst_id       = (uint32_t)m_instanceInfos.size() - 1;
+  info.inst_id       = (uint32_t)m_instanceInfos.size();
   info.mesh_id       = meshId;
   info.Matrix = matrix;
 

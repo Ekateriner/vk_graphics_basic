@@ -107,7 +107,8 @@ private:
 
   std::vector<hydra_xml::Camera> m_sceneCameras = {};
   std::vector<LightInfo> m_lightInfos = {};
-  uint32_t lightCount = 10;
+  uint32_t lightCount;
+  uint32_t lightGridSize = 10;
   LiteMath::Box4f sceneBbox;
 
   uint32_t m_totalVertices = 0u;
