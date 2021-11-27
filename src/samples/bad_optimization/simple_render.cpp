@@ -529,7 +529,7 @@ void SimpleRender::ProcessInput(const AppInput &input)
     std::system("cd ../resources/shaders && python compile_frustum_culling_shaders.py");
     std::system("cd ../src/samples/bad_optimization/shaders && python compile_shaders.py");
 #else
-    std::system("cd ../resources/shaders && python compile_frustum_culling_shaders.py");
+    std::system("cd ../resources/shaders && python3 compile_frustum_culling_shaders.py");
     std::system("cd ../src/samples/bad_optimization/shaders && python3 compile_shaders.py");
 #endif
 
