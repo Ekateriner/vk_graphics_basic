@@ -8,7 +8,7 @@
 #include <vk_copy.h>
 
 #include "../loader_utils/hydraxml.h"
-#include "../resources/shaders/common.h"
+//#include "../resources/shaders/common.h"
 
 /*struct InstanceInfo
 {

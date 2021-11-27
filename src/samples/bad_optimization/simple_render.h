@@ -18,7 +18,7 @@
 class SimpleRender : public IRender
 {
 public:
-  const std::string VERTEX_SHADER_PATH = "../resources/shaders/g_buffer_fill.vert";
+  const std::string VERTEX_SHADER_PATH = "../resources/shaders/frustum_cul.vert";
   const std::string COMPUTE_SHADER_PATH = "../resources/shaders/frustum_cul.comp";
   const std::string FRAGMENT_SHADER_PATH = "../src/samples/bad_optimization/shaders/simple.frag";
 
@@ -161,7 +161,7 @@ protected:
   void CleanupPipelineAndSwapchain();
   void RecreateSwapChain();
 
-  void CreateUniformBuffer();
+  void CreateBuffers();
   void UpdateUniformBuffer(float a_time);
 
   void Cleanup();

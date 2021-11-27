@@ -264,18 +264,6 @@ void SimpleRender::CreateDevice(uint32_t a_deviceId)
 
 void SimpleRender::SetupSimplePipeline()
 {
-  iicommand_buffer = vk_utils::createBuffer(m_device,
-                                           m_pScnMgr->MeshesNum() * sizeof(VkDrawIndexedIndirectCommand),
-                                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
-  drawAtomic_buffer = vk_utils::createBuffer(m_device,
-                                             sizeof(uint32_t),
-                                             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-  drawMatrices_buffer = vk_utils::createBuffer(m_device,
-                                               m_pScnMgr->InstancesNum() * sizeof(LiteMath::float4x4),
-                                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-  m_buffers_memory = vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice,
-                                                          {iicommand_buffer, drawAtomic_buffer, drawMatrices_buffer}, 0);
-
   // if we are recreating pipeline (for example, to reload shaders)
   // we need to cleanup old pipeline
   if(m_fillForwardPipeline.layout != VK_NULL_HANDLE)
@@ -394,8 +382,20 @@ void SimpleRender::SetupSimplePipeline()
   m_computeForwardPipeline.pipeline = comp_maker.MakePipeline(m_device);
 }
 
-void SimpleRender::CreateUniformBuffer()
+void SimpleRender::CreateBuffers()
 {
+  iicommand_buffer = vk_utils::createBuffer(m_device,
+                                            m_pScnMgr->MeshesNum() * sizeof(VkDrawIndexedIndirectCommand),
+                                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+  drawAtomic_buffer = vk_utils::createBuffer(m_device,
+                                             sizeof(uint32_t),
+                                             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+  drawMatrices_buffer = vk_utils::createBuffer(m_device,
+                                               m_pScnMgr->InstancesNum() * sizeof(LiteMath::float4x4),
+                                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+  m_buffers_memory = vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice,
+                                                          {iicommand_buffer, drawAtomic_buffer, drawMatrices_buffer}, 0);
+
   VkMemoryRequirements memReq;
   m_ubo = vk_utils::createBuffer(m_device, sizeof(m_uniforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &memReq);
 
@@ -772,7 +772,7 @@ void SimpleRender::ProcessInput(const AppInput &input)
 #ifdef WIN32
     std::system("cd ../resources/shaders && python compile_simple_render_shaders.py");
 #else
-    std::system("cd ../resources/shaders && python3 compile_simple_render_shaders.py");
+    std::system("cd ../resources/shaders && python3 compile_deffered_shaders.py");
 #endif
 
     SetupSimplePipeline();
@@ -813,7 +813,7 @@ void SimpleRender::LoadScene(const char* path, bool transpose_inst_matrices)
 {
   m_pScnMgr->LoadSceneXML(path, transpose_inst_matrices);
 
-  CreateUniformBuffer();
+  CreateBuffers();
   SetupSimplePipeline();
 
   auto loadedCam = m_pScnMgr->GetCamera(0);

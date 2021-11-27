@@ -13,7 +13,7 @@ void SimpleRenderTexture::LoadScene(const char* path, bool transpose_inst_matric
 {
   m_pScnMgr->LoadSceneXML(path, transpose_inst_matrices);
 
-  CreateUniformBuffer();
+  CreateBuffers();
   LoadTexture();
   SetupSimplePipeline();
 
@@ -137,7 +137,7 @@ void SimpleRenderTexture::ProcessInput(const AppInput &input)
 #ifdef WIN32
     std::system("cd ../resources/shaders && python compile_simple_render_shaders.py");
 #else
-    std::system("cd ../resources/shaders && python3 compile_simple_texture_shaders.py");
+    std::system("cd ../resources/shaders && python3 compile_deffered_shaders.py");
 #endif
 
     SetupSimplePipeline();

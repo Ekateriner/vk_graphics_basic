@@ -129,17 +129,6 @@ void SimpleRender::CreateDevice(uint32_t a_deviceId)
 
 void SimpleRender::SetupSimplePipeline()
 {
-  iicommand_buffer = vk_utils::createBuffer(m_device,
-                                            m_pScnMgr->MeshesNum() * sizeof(VkDrawIndexedIndirectCommand),
-                                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
-  drawAtomic_buffer = vk_utils::createBuffer(m_device,
-                                             sizeof(uint32_t),
-                                             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-  drawMatrices_buffer = vk_utils::createBuffer(m_device,
-                                               m_pScnMgr->InstancesNum() * sizeof(LiteMath::float4x4),
-                                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-  m_buffers_memory = vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice,
-                                                          {iicommand_buffer, drawAtomic_buffer, drawMatrices_buffer}, 0);
   std::vector<std::pair<VkDescriptorType, uint32_t> > dtypes = {
       {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,             1},
       {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 6}
@@ -174,6 +163,16 @@ void SimpleRender::SetupSimplePipeline()
     vkDestroyPipeline(m_device, m_basicForwardPipeline.pipeline, nullptr);
     m_basicForwardPipeline.pipeline = VK_NULL_HANDLE;
   }
+  if (m_computeForwardPipeline.pipeline != VK_NULL_HANDLE)
+  {
+    vkDestroyPipeline(m_device, m_computeForwardPipeline.pipeline, nullptr);
+    m_computeForwardPipeline.pipeline = VK_NULL_HANDLE;
+  }
+  if (m_computeForwardPipeline.layout != VK_NULL_HANDLE)
+  {
+    vkDestroyPipelineLayout(m_device, m_computeForwardPipeline.layout, nullptr);
+    m_computeForwardPipeline.layout = VK_NULL_HANDLE;
+  }
 
   vk_utils::GraphicsPipelineMaker maker;
 
@@ -196,8 +195,20 @@ void SimpleRender::SetupSimplePipeline()
   m_computeForwardPipeline.pipeline = comp_maker.MakePipeline(m_device);
 }
 
-void SimpleRender::CreateUniformBuffer()
+void SimpleRender::CreateBuffers()
 {
+  iicommand_buffer = vk_utils::createBuffer(m_device,
+                                            m_pScnMgr->MeshesNum() * sizeof(VkDrawIndexedIndirectCommand),
+                                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+  drawAtomic_buffer = vk_utils::createBuffer(m_device,
+                                             sizeof(uint32_t),
+                                             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+  drawMatrices_buffer = vk_utils::createBuffer(m_device,
+                                               m_pScnMgr->InstancesNum() * sizeof(LiteMath::float4x4),
+                                               VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+  m_buffers_memory = vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice,
+                                                          {iicommand_buffer, drawAtomic_buffer, drawMatrices_buffer}, 0);
+
   VkMemoryRequirements memReq;
   m_ubo = vk_utils::createBuffer(m_device, sizeof(m_uniforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &memReq);
 
@@ -515,10 +526,11 @@ void SimpleRender::ProcessInput(const AppInput &input)
   if(input.keyPressed[GLFW_KEY_B])
   {
 #ifdef WIN32
-    std::system("cd ../resources/shaders && python compile_simple_render_shaders.py");
+    std::system("cd ../resources/shaders && python compile_frustum_culling_shaders.py");
     std::system("cd ../src/samples/bad_optimization/shaders && python compile_shaders.py");
 #else
-    std::system("cd ../resources/shaders && python3 compile_simple_render_shaders.py");
+    std::system("cd ../resources/shaders && python compile_frustum_culling_shaders.py");
+    std::system("cd ../src/samples/bad_optimization/shaders && python3 compile_shaders.py");
 #endif
 
     SetupSimplePipeline();
@@ -564,7 +576,7 @@ void SimpleRender::LoadScene(const char* path, bool transpose_inst_matrices)
   }
   m_pScnMgr->UpdateGeoDataOnGPU();
 
-  CreateUniformBuffer();
+  CreateBuffers();
   SetupSimplePipeline();
 
   auto loadedCam = m_pScnMgr->GetCamera(0);

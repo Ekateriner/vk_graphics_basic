@@ -2,7 +2,7 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_GOOGLE_include_directive : require
 
-#include "../../../../resources/shaders/common.h"
+#include "../../../../resources/shaders/common_withLight.h"
 
 layout(location = 0) out vec4 out_fragColor;
 
@@ -16,7 +16,7 @@ layout (location = 0 ) in VS_OUT
 
 layout(binding = 0, set = 0) uniform AppData
 {
-    UniformParams Params;
+    UniformParamsL Params;
 };
 
 float fog_density(float z) {

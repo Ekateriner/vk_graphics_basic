@@ -177,7 +177,7 @@ protected:
   void CreateRenderpass();
   void CreateFrameBuffer();
 
-  void CreateUniformBuffer();
+  void CreateBuffers();
   void UpdateUniformBuffer(float a_time);
 
   void Cleanup();
