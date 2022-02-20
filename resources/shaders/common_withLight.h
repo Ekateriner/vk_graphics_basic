@@ -23,9 +23,12 @@ struct UniformParamsL
 {
     mat4  lightMatrix;
     vec3  lightPos;
-    vec3  baseColor;
     float time;
-    bool animateLightColor;
+    vec3  baseColor;
+    uint animateLightColor;
+    vec3  flashDir;
+    uint flashLight;
+    vec3  flashMinMaxRadius; // min + max + radius
 };
 
 #endif //VK_GRAPHICS_BASIC_COMMON_WITHLIGHT_H

@@ -231,7 +231,7 @@ void SimpleShadowmapRender::SetupSimplePipeline()
 void SimpleShadowmapRender::CreateUniformBuffer()
 {
   VkMemoryRequirements memReq;
-  m_ubo = vk_utils::createBuffer(m_device, sizeof(UniformParams), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &memReq);
+  m_ubo = vk_utils::createBuffer(m_device, sizeof(UniformParamsL), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &memReq);
 
   VkMemoryAllocateInfo allocateInfo = {};
   allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -246,6 +246,11 @@ void SimpleShadowmapRender::CreateUniformBuffer()
 
   vkMapMemory(m_device, m_uboAlloc, 0, sizeof(m_uniforms), 0, &m_uboMappedMem);
 
+  m_uniforms.animateLightColor = true;
+  m_uniforms.flashLight = true;
+  m_uniforms.flashMinMaxRadius = LiteMath::float3(0.1f, 0.2f, 5.0f);
+  //m_uniforms.lightPos = LiteMath::float3(0.0f, 0.0f, 10.0f);
+
   UpdateUniformBuffer(0.0f);
 }
 
@@ -253,6 +258,7 @@ void SimpleShadowmapRender::UpdateUniformBuffer(float a_time)
 {
   m_uniforms.lightMatrix = m_lightMatrix;
   m_uniforms.lightPos    = m_light.cam.pos; //LiteMath::float3(sinf(a_time), 1.0f, cosf(a_time));
+  m_uniforms.flashDir = m_light.cam.forward();
   m_uniforms.time        = a_time;
 
   m_uniforms.baseColor = LiteMath::float3(0.9f, 0.92f, 1.0f);
