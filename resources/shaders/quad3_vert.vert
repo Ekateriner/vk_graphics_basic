@@ -1,12 +1,12 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
-layout(push_constant) uniform params_t
-{
-  vec4 scaleAndOffs;
-  vec4 depthMinMaxScale;
-
-} params;
+//layout(push_constant) uniform params_t
+//{
+//  vec4 scaleAndOffs;
+//  vec4 depthMinMaxScale;
+//
+//} params;
 
 layout (location = 0 ) out VS_OUT
 {

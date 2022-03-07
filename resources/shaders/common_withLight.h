@@ -29,6 +29,7 @@ struct UniformParamsL
     vec3  flashDir;
     uint flashLight;
     vec3  flashMinMaxRadius; // min + max + radius
+    uint vsm;
 };
 
 #endif //VK_GRAPHICS_BASIC_COMMON_WITHLIGHT_H

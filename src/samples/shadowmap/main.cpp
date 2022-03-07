@@ -18,7 +18,7 @@ void initVulkanGLFW(std::shared_ptr<IRender> &app, GLFWwindow* window, int devic
   {
     VkSurfaceKHR surface;
     VK_CHECK_RESULT(glfwCreateWindowSurface(app->GetVkInstance(), window, nullptr, &surface));
-//    setupImGuiContext(window);
+    setupImGuiContext(window);
     app->InitPresentation(surface);
   }
 }
@@ -41,8 +41,9 @@ int main()
   initVulkanGLFW(app, window, VULKAN_DEVICE_ID);
 
   app->LoadScene("../resources/scenes/043_cornell_normals/statex_00001.xml", false);
-
-  mainLoop(app, window);
+  
+  bool showGUI = true;
+  mainLoop(app, window, showGUI);
 
   return 0;
 }
