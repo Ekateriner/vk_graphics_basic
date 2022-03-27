@@ -3,6 +3,7 @@
 #include "scene_mgr.h"
 #include "vk_utils.h"
 #include "vk_buffers.h"
+#include "brown_gen.h"
 //#include <random>
 #include "../loader_utils/hydraxml.h"
 
@@ -33,18 +34,17 @@ SceneManager::SceneManager(VkDevice a_device, VkPhysicalDevice a_physDevice,
 
 
 
-  m_lightInfos.push_back({float4(1.0, 0.7, 0.4, 0.3),
-                          float3(50.0, 50.0, 50.0),
-                          float(200.0) });
+//  m_lightInfos.push_back({float4(1.0, 0.7, 0.4, 0.3),
+//                          float3(50.0, 50.0, 50.0),
+//                          float(100.0) });
 
   for (uint32_t i = 0; i < lightGridSize; i++)
     for (uint32_t j = 0; j < lightGridSize; j++)
       m_lightInfos.push_back({float4(abs(cos(i)) / 2.0, abs(cos(j)) / 2.0, 0.5, 0.3f),
-                              float3(10 * i, 5.0, j * 10),
+                              float3(20 * i, 5.0, j * 20),
                               float(15.5 + i) });
 
-  lightCount = m_lightInfos.size();
-
+  //lightCount = m_lightInfos.size();
 }
 
 bool SceneManager::LoadSceneXML(const std::string &scenePath, bool transpose)
@@ -233,11 +233,12 @@ void SceneManager::LoadGeoDataOnGPU()
   m_meshInfoBuf = vk_utils::createBuffer(m_device, minfoBufSize,   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   m_lightInfoBuf = vk_utils::createBuffer(m_device, linfoBufSize,   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   m_instanceInfoBuf = vk_utils::createBuffer(m_device, iinfoBufSize,   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-
+  
   VkMemoryAllocateFlags allocFlags {};
 
-  m_geoMemAlloc = vk_utils::allocateAndBindWithPadding(m_device, m_physDevice, {m_geoVertBuf, m_geoIdxBuf, m_meshInfoBuf, m_instanceInfoBuf, m_lightInfoBuf}, allocFlags);
-
+  m_geoMemAlloc = vk_utils::allocateAndBindWithPadding(m_device, m_physDevice, {m_geoVertBuf, m_geoIdxBuf, m_meshInfoBuf, m_instanceInfoBuf}, allocFlags);
+  m_lightMemAlloc = vk_utils::allocateAndBindWithPadding(m_device, m_physDevice, {m_lightInfoBuf}, allocFlags);
+  
 //  std::vector<LiteMath::uint2> mesh_info_tmp;
 //  for(const auto& m : m_meshInfos)
 //  {
@@ -295,11 +296,29 @@ void SceneManager::DestroyBuffers() {
     vkDestroyBuffer(m_device, m_lightInfoBuf, nullptr);
     m_lightInfoBuf = VK_NULL_HANDLE;
   }
+  
+  if(m_landInfoBuf != VK_NULL_HANDLE)
+  {
+    vkDestroyBuffer(m_device, m_landInfoBuf, nullptr);
+    m_landInfoBuf = VK_NULL_HANDLE;
+  }
+  
+  if(m_landMemAlloc != VK_NULL_HANDLE)
+  {
+    vkFreeMemory(m_device, m_landMemAlloc, nullptr);
+    m_landMemAlloc = VK_NULL_HANDLE;
+  }
 
   if(m_geoMemAlloc != VK_NULL_HANDLE)
   {
     vkFreeMemory(m_device, m_geoMemAlloc, nullptr);
     m_geoMemAlloc = VK_NULL_HANDLE;
+  }
+  
+  if(m_lightMemAlloc != VK_NULL_HANDLE)
+  {
+    vkFreeMemory(m_device, m_lightMemAlloc, nullptr);
+    m_lightMemAlloc = VK_NULL_HANDLE;
   }
 }
 
@@ -308,9 +327,108 @@ void SceneManager::DestroyScene()
   DestroyBuffers();
 
   m_pCopyHelper = nullptr;
+  vk_utils::deleteImg(m_device, &m_height_map);
 
   m_meshInfos.clear();
   m_pMeshData = nullptr;
   m_instanceInfos.clear();
   m_lightInfos.clear();
+}
+
+void SceneManager::CleanScene()
+{
+  if(m_geoVertBuf != VK_NULL_HANDLE)
+  {
+    vkDestroyBuffer(m_device, m_geoVertBuf, nullptr);
+    m_geoVertBuf = VK_NULL_HANDLE;
+  }
+  
+  if(m_geoIdxBuf != VK_NULL_HANDLE)
+  {
+    vkDestroyBuffer(m_device, m_geoIdxBuf, nullptr);
+    m_geoIdxBuf = VK_NULL_HANDLE;
+  }
+  
+  if(m_meshInfoBuf != VK_NULL_HANDLE)
+  {
+    vkDestroyBuffer(m_device, m_meshInfoBuf, nullptr);
+    m_meshInfoBuf = VK_NULL_HANDLE;
+  }
+  
+  if(m_instanceInfoBuf != VK_NULL_HANDLE)
+  {
+    vkDestroyBuffer(m_device, m_instanceInfoBuf, nullptr);
+    m_instanceInfoBuf = VK_NULL_HANDLE;
+  }
+  
+  if(m_geoMemAlloc != VK_NULL_HANDLE)
+  {
+    vkFreeMemory(m_device, m_geoMemAlloc, nullptr);
+    m_geoMemAlloc = VK_NULL_HANDLE;
+  }
+  
+  m_meshInfos.clear();
+  m_instanceInfos.clear();
+};
+
+void SceneManager::GenerateLandscapeTex(int width, int height) {
+  std::vector<float> tex;
+  float scale = 3.0;
+  for (int i = 0; i < height; i++) {
+    for (int j = 0; j < width; j++) {
+      LiteMath::float2 st = LiteMath::float2(float(i)/width, float(j) / height);
+      st.x *= float(width)/height;
+      
+      tex.push_back(BrownGenerator::fbm( st * scale));
+    }
+  }
+  m_height_map = vk_utils::allocateColorTextureFromDataLDR(m_device, m_physDevice,
+                                            reinterpret_cast<const unsigned char*>(tex.data()), width, height,
+                                            1, VK_FORMAT_R32_SFLOAT, m_pCopyHelper);
+  
+  VkMemoryRequirements memReq;
+  m_landInfoBuf = vk_utils::createBuffer(m_device, sizeof(LandscapeInfo), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &memReq);
+  
+  VkMemoryAllocateInfo allocateInfo = {};
+  allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  allocateInfo.pNext = nullptr;
+  allocateInfo.allocationSize = memReq.size;
+  allocateInfo.memoryTypeIndex = vk_utils::findMemoryType(memReq.memoryTypeBits,
+                                                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                                          VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                                          m_physDevice);
+  VK_CHECK_RESULT(vkAllocateMemory(m_device, &allocateInfo, nullptr, &m_landMemAlloc))
+  
+  VK_CHECK_RESULT(vkBindBufferMemory(m_device, m_landInfoBuf, m_landMemAlloc, 0));
+  
+  vkMapMemory(m_device, m_landMemAlloc, 0, sizeof(LandscapeInfo), 0, &m_landMappedMem);
+  
+  
+  m_land_info.height = height;
+  m_land_info.width = width;
+  m_land_info.scale = float4(width, 40.0, height, 0.0);
+  m_land_info.trans = float4(-10.0f, -10.0, -10.0, 0.0);
+  //m_land_info.trans = float3(-width / 4, -1.0, -height/4);
+  m_land_info.sun_position = float4(100.0, 40.0, 100.0, 1.0);
+  m_lightInfos.push_back({float4(1.0),
+                          LiteMath::to_float3(m_land_info.sun_position),
+                          float(0.0) });
+  memcpy(m_landMappedMem, &m_land_info, sizeof(LandscapeInfo));
+  
+  if(m_lightInfoBuf != VK_NULL_HANDLE)
+  {
+    vkDestroyBuffer(m_device, m_lightInfoBuf, nullptr);
+    m_lightInfoBuf = VK_NULL_HANDLE;
+  }
+  if(m_lightMemAlloc != VK_NULL_HANDLE)
+  {
+    vkFreeMemory(m_device, m_lightMemAlloc, nullptr);
+    m_lightMemAlloc = VK_NULL_HANDLE;
+  }
+  
+  VkDeviceSize linfoBufSize = m_lightInfos.size() * sizeof(LightInfo);
+  m_lightInfoBuf = vk_utils::createBuffer(m_device, linfoBufSize,   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+  VkMemoryAllocateFlags allocFlags {};
+  m_lightMemAlloc = vk_utils::allocateAndBindWithPadding(m_device, m_physDevice, {m_lightInfoBuf}, allocFlags);
+  m_pCopyHelper->UpdateBuffer(m_lightInfoBuf, 0, m_lightInfos.data(), linfoBufSize);
 }

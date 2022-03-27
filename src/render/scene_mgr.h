@@ -6,6 +6,7 @@
 #include <geom/vk_mesh.h>
 #include "LiteMath.h"
 #include <vk_copy.h>
+#include "vk_images.h"
 
 #include "../loader_utils/hydraxml.h"
 //#include "../resources/shaders/common.h"
@@ -49,6 +50,15 @@ struct LightInfo
     float radius;
 };
 
+struct LandscapeInfo
+{
+    float4 scale;
+    float4 trans;
+    float4 sun_position;
+    int width;
+    int height;
+};
+
 struct SceneManager
 {
   SceneManager(VkDevice a_device, VkPhysicalDevice a_physDevice, uint32_t a_transferQId, uint32_t a_graphicsQId,
@@ -69,6 +79,8 @@ struct SceneManager
   void DrawMarkedInstances();
 
   void DestroyScene();
+  void CleanScene();
+  void GenerateLandscapeTex(int width, int height);
   void UpdateGeoDataOnGPU();
 
   VkPipelineVertexInputStateCreateInfo GetPipelineVertexInputStateCreateInfo() { return m_pMeshData->VertexInputLayout();}
@@ -78,11 +90,12 @@ struct SceneManager
   VkBuffer GetMeshInfoBuffer()  const { return m_meshInfoBuf; }
   VkBuffer GetInstanceInfoBuffer()  const { return m_instanceInfoBuf; }
   VkBuffer GetLightInfoBuffer()  const { return m_lightInfoBuf; }
+  VkBuffer GetLandInfoBuffer()  const { return m_landInfoBuf; }
   std::shared_ptr<vk_utils::ICopyEngine> GetCopyHelper() { return  m_pCopyHelper; }
 
   uint32_t MeshesNum() const {return (uint32_t)m_meshInfos.size();}
   uint32_t InstancesNum() const {return (uint32_t)m_instanceInfos.size();}
-  uint32_t LightsNum() const {return lightCount;}
+  uint32_t LightsNum() const {return m_lightInfos.size();}
 
   hydra_xml::Camera GetCamera(uint32_t camId) const;
   MeshInfoWithBbox GetMeshInfo(uint32_t meshId) const {assert(meshId < m_meshInfos.size()); return m_meshInfos[meshId];}
@@ -93,6 +106,7 @@ struct SceneManager
   //LiteMath::Box4f GetInstanceBbox(uint32_t instId) const {assert(instId < m_instanceBboxes.size()); return m_instanceBboxes[instId];}
   LiteMath::float4x4 GetInstanceMatrix(uint32_t instId) const {assert(instId < m_instanceInfos.size()); return m_instanceInfos[instId].Matrix;}
   LiteMath::Box4f GetSceneBbox() const {return sceneBbox;}
+  vk_utils::VulkanImageMem GetHeightMap() const { return m_height_map; }
 
 private:
   void LoadGeoDataOnGPU();
@@ -107,9 +121,14 @@ private:
 
   std::vector<hydra_xml::Camera> m_sceneCameras = {};
   std::vector<LightInfo> m_lightInfos = {};
-  uint32_t lightCount;
+  //uint32_t lightCount;
   uint32_t lightGridSize = 10;
   LiteMath::Box4f sceneBbox;
+  vk_utils::VulkanImageMem m_height_map;
+  LandscapeInfo m_land_info = {};
+  VkBuffer m_landInfoBuf = VK_NULL_HANDLE;
+  void* m_landMappedMem = nullptr;
+  VkDeviceMemory m_landMemAlloc = VK_NULL_HANDLE;
 
   uint32_t m_totalVertices = 0u;
   uint32_t m_totalIndices  = 0u;
@@ -121,7 +140,8 @@ private:
   VkBuffer m_lightInfoBuf  = VK_NULL_HANDLE;
   //VkBuffer m_instanceMatricesBuffer = VK_NULL_HANDLE;
   VkDeviceMemory m_geoMemAlloc = VK_NULL_HANDLE;
-
+  VkDeviceMemory m_lightMemAlloc = VK_NULL_HANDLE;
+  
   VkDevice m_device = VK_NULL_HANDLE;
   VkPhysicalDevice m_physDevice = VK_NULL_HANDLE;
   uint32_t m_transferQId = UINT32_MAX;

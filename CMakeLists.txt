@@ -74,5 +74,6 @@ add_subdirectory(src/samples/shadowmap)
 add_subdirectory(src/samples/simpleforward)
 add_subdirectory(src/samples/simple_compute)
 add_subdirectory(src/samples/bad_optimization)
+add_subdirectory(src/samples/landscape)
 
 

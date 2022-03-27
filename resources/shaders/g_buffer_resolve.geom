@@ -59,7 +59,7 @@ void main() {
     LightInfo li = lInfos[light_ind];
     vec3 center = vec3(params.mView * vec4(li.lightPos, 1.0f));
 
-    if (length(center) < li.radius) // inner
+    if (length(center) < li.radius || li.radius < 0.001f) // inner
     {
         gl_Position = vec4(-1.0f, -1.0f, 1.0f, 1.0f);
         light_ind = v_light_ind[0];

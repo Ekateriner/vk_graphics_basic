@@ -36,6 +36,7 @@ layout (input_attachment_index = 2, set = 1, binding = 2) uniform subpassInput i
 layout (input_attachment_index = 3, set = 1, binding = 3) uniform subpassInput inputTangent;
 
 const float lightSize = 0.1;
+const vec3 ambient = vec3(0.1);
 
 float pow2 (float x) {
     return x * x;
@@ -55,19 +56,27 @@ void main()
     vec3 Pos = camPos.xyz / camPos.w;
 
     vec3 lightDir = (params.mView * vec4(li.lightPos, 1.0f)).xyz - Pos;
-    li.lightPos.xy = gl_FragCoord.xy;
+    //li.lightPos.xy = gl_FragCoord.xy;
 
-    // красивый затухающий свет
-    float lightDist2 = dot(lightDir, lightDir);
-    lightDir = normalize(lightDir);
+    if (li.radius < 0.001f) {
+        lightDir = normalize(lightDir);
+        vec3 lightDiffuse = max(dot(Normal, lightDir), 0.0f) * li.lightColor.rgb;
 
-    float lightRadiusMin2 = lightSize * lightSize;
-    float lightRadiusMax2 = li.radius * li.radius;
+        out_fragColor = vec4((lightDiffuse * subpassLoad(inputAlbedo).w + ambient) * Color, 0.5);
+    }
+    else {
+        // красивый затухающий свет
+        float lightDist2 = dot(lightDir, lightDir);
+        lightDir = normalize(lightDir);
 
-    float lightSampleDist = mix(lightRadiusMin2, lightRadiusMax2, 0.05);
-    float attenuation = lightSampleDist / max(lightRadiusMin2, lightDist2) * pow2(max(1 - pow2(lightDist2 / lightRadiusMax2), 0));
+        float lightRadiusMin2 = lightSize * lightSize;
+        float lightRadiusMax2 = li.radius * li.radius;
 
-    vec3 lightDiffuse = max(dot(Normal, lightDir), 0.0f) * li.lightColor.rgb;
+        float lightSampleDist = mix(lightRadiusMin2, lightRadiusMax2, 0.05);
+        float attenuation = lightSampleDist / max(lightRadiusMin2, lightDist2) * pow2(max(1 - pow2(lightDist2 / lightRadiusMax2), 0));
 
-    out_fragColor = vec4(lightDiffuse * subpassLoad(inputAlbedo).rgb, attenuation);
+        vec3 lightDiffuse = max(dot(Normal, lightDir), 0.0f) * li.lightColor.rgb;
+
+        out_fragColor = vec4(lightDiffuse * Color, attenuation);
+    }
 }

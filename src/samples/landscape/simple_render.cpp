@@ -21,6 +21,7 @@ void SimpleRender::SetupDeviceFeatures()
   m_enabledDeviceFeatures.drawIndirectFirstInstance = VK_TRUE;
   m_enabledDeviceFeatures.multiDrawIndirect = VK_TRUE;
   m_enabledDeviceFeatures.geometryShader = VK_TRUE;
+  m_enabledDeviceFeatures.tessellationShader = VK_TRUE;
 }
 
 void SimpleRender::SetupDeviceExtensions()
@@ -109,10 +110,13 @@ void SimpleRender::InitPresentation(VkSurfaceKHR &a_surface)
   CreateFrameBuffer();
 
   m_pGUIRender = std::make_shared<ImGuiRender>(m_instance, m_device, m_physicalDevice, m_queueFamilyIDXs.graphics, m_graphicsQueue, m_swapchain);
+  
+  m_landscape_sampler = vk_utils::createSampler(
+          m_device, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+          VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK);
 }
 
 void SimpleRender::CreateRenderpass() {
-
     std::vector<VkAttachmentDescription> attachmentDescriptions;
     attachmentDescriptions.push_back(
             VkAttachmentDescription {
@@ -296,111 +300,229 @@ void SimpleRender::SetupSimplePipeline()
     vkDestroyPipelineLayout(m_device, m_computeForwardPipeline.layout, nullptr);
     m_computeForwardPipeline.layout = VK_NULL_HANDLE;
   }
+  if(m_landscapePipeline.layout != VK_NULL_HANDLE)
+  {
+    vkDestroyPipelineLayout(m_device, m_landscapePipeline.layout, nullptr);
+    m_landscapePipeline.layout = VK_NULL_HANDLE;
+  }
+  if(m_landscapePipeline.pipeline != VK_NULL_HANDLE)
+  {
+    vkDestroyPipeline(m_device, m_landscapePipeline.pipeline, nullptr);
+    m_landscapePipeline.pipeline = VK_NULL_HANDLE;
+  }
 
   if(m_pBindings == nullptr) {
       std::vector<std::pair<VkDescriptorType, uint32_t> > dtypes = {
-              {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2},
+              {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4},
               {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 7},
+              {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1},
               {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 4}
       };
-      m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 4);
+      m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 5);
   }
-
-  m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
-  m_pBindings->BindBuffer(0, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-  m_pBindings->BindBuffer(1, drawMatrices_buffer);
-  m_pBindings->BindEnd(&m_fill_dSet, &m_fill_dSetLayout);
-
-  m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT);
-  m_pBindings->BindImage(0, m_depthBuffer.view, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT);
-  m_pBindings->BindImage(1, m_normalBuffer.view, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT);
-  m_pBindings->BindImage(2, m_albedoBuffer.view, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT);
-  m_pBindings->BindImage(3, m_tangentBuffer.view, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT);
-  m_pBindings->BindEnd(&m_resolve_dSet, &m_resolve_dSetLayout);
-
-  m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
-  m_pBindings->BindBuffer(0, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-  m_pBindings->BindBuffer(1, m_pScnMgr->GetLightInfoBuffer());
-  m_pBindings->BindEnd(&m_light_dSet, &m_light_dSetLayout);
-
-  m_pBindings->BindBegin(VK_SHADER_STAGE_COMPUTE_BIT);
-  m_pBindings->BindBuffer(0, iicommand_buffer);
-  m_pBindings->BindBuffer(1, m_pScnMgr->GetMeshInfoBuffer());
-  m_pBindings->BindBuffer(2, m_pScnMgr->GetInstanceInfoBuffer());
-  m_pBindings->BindBuffer(3, drawAtomic_buffer);
-  m_pBindings->BindBuffer(4, drawMatrices_buffer);
-  m_pBindings->BindEnd(&m_comp_dSet, &m_comp_dSetLayout);
-
-  vk_utils::GraphicsPipelineMaker maker;
-
-  std::unordered_map<VkShaderStageFlagBits, std::string> shader_paths;
-  shader_paths[VK_SHADER_STAGE_FRAGMENT_BIT] = FRAGMENT_SHADER_PATH_FILL + ".spv";
-  if (make_geom) {
+  
+  if (m_pScnMgr->InstancesNum() > 0) {
+    m_pBindings->BindBegin(VK_SHADER_STAGE_COMPUTE_BIT);
+    m_pBindings->BindBuffer(0, iicommand_buffer);
+    m_pBindings->BindBuffer(1, m_pScnMgr->GetMeshInfoBuffer());
+    m_pBindings->BindBuffer(2, m_pScnMgr->GetInstanceInfoBuffer());
+    m_pBindings->BindBuffer(3, drawAtomic_buffer);
+    m_pBindings->BindBuffer(4, drawMatrices_buffer);
+    m_pBindings->BindEnd(&m_comp_dSet, &m_comp_dSetLayout);
+  }
+  
+  {
+    m_pBindings->BindBegin(VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
+                           VK_SHADER_STAGE_FRAGMENT_BIT);
+    m_pBindings->BindBuffer(0, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    m_pBindings->BindBuffer(1, m_pScnMgr->GetLandInfoBuffer(), VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    m_pBindings->BindImage(2, m_pScnMgr->GetHeightMap().view, m_landscape_sampler,
+                           VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    m_pBindings->BindEnd(&m_landscape_dSet, &m_landscape_dSetLayout);
+  }
+  
+  if (m_pScnMgr->InstancesNum() > 0) {
+    m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
+    m_pBindings->BindBuffer(0, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    m_pBindings->BindBuffer(1, drawMatrices_buffer);
+    m_pBindings->BindEnd(&m_fill_dSet, &m_fill_dSetLayout);
+  }
+  
+  {
+    m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT);
+    m_pBindings->BindImage(0, m_depthBuffer.view, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT);
+    m_pBindings->BindImage(1, m_normalBuffer.view, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT);
+    m_pBindings->BindImage(2, m_albedoBuffer.view, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT);
+    m_pBindings->BindImage(3, m_tangentBuffer.view, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT);
+    m_pBindings->BindEnd(&m_resolve_dSet, &m_resolve_dSetLayout);
+  }
+  
+  {
+    m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
+    m_pBindings->BindBuffer(0, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    m_pBindings->BindBuffer(1, m_pScnMgr->GetLightInfoBuffer());
+    m_pBindings->BindEnd(&m_light_dSet, &m_light_dSetLayout);
+  }
+  
+  {
+    vk_utils::GraphicsPipelineMaker maker;
+    
+    std::unordered_map<VkShaderStageFlagBits, std::string> shader_paths;
+    shader_paths[VK_SHADER_STAGE_FRAGMENT_BIT] = FRAGMENT_SHADER_PATH_LAND + ".spv";
+    shader_paths[VK_SHADER_STAGE_VERTEX_BIT] = VERTEX_SHADER_PATH_LAND + ".spv";
+    shader_paths[VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT] = TESSELATION_CONTROL_SHADER_PATH_LAND + ".spv";
+    shader_paths[VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT] = TESSELATION_EVALUATION_SHADER_PATH_LAND + ".spv";
+    maker.LoadShaders(m_device, shader_paths);
+    
+    m_landscapePipeline.layout = maker.MakeLayout(m_device, {m_landscape_dSetLayout}, sizeof(resolveConst));
+    
+    maker.SetDefaultState(m_width, m_height);
+    std::array<VkPipelineColorBlendAttachmentState, m_gbuf_size - 1> blendStates{};
+    VkPipelineColorBlendAttachmentState defaultState{};
+    defaultState.blendEnable = VK_FALSE;
+    defaultState.colorWriteMask =
+            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    blendStates.fill(defaultState);
+    
+    maker.colorBlending.attachmentCount = blendStates.size();
+    maker.colorBlending.pAttachments = blendStates.data();
+    
+    std::array dynStates{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    
+    VkPipelineDynamicStateCreateInfo dynamicState = {};
+    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.dynamicStateCount = (uint32_t) dynStates.size();
+    dynamicState.pDynamicStates = dynStates.data();
+    
+    VkPipelineVertexInputStateCreateInfo vertexLayout = {};
+    vertexLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexLayout.vertexBindingDescriptionCount = 0;
+    vertexLayout.vertexAttributeDescriptionCount = 0;
+    
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
+    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
+    inputAssembly.primitiveRestartEnable = false;
+    
+    VkPipelineTessellationStateCreateInfo tessState = {};
+    tessState.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO;
+    tessState.patchControlPoints = 4;
+    
+    VkGraphicsPipelineCreateInfo pipelineInfo = {};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.flags = 0;
+    pipelineInfo.stageCount = static_cast<uint32_t>(shader_paths.size());
+    pipelineInfo.pStages = maker.shaderStageInfos;
+    pipelineInfo.pVertexInputState = &vertexLayout;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &maker.viewportState;
+    pipelineInfo.pRasterizationState = &maker.rasterizer;
+    pipelineInfo.pMultisampleState = &maker.multisampling;
+    pipelineInfo.pColorBlendState = &maker.colorBlending;
+    pipelineInfo.pTessellationState = &tessState;
+    pipelineInfo.layout = m_landscapePipeline.layout;
+    pipelineInfo.renderPass = m_screenRenderPass;
+    pipelineInfo.subpass = 0;
+    pipelineInfo.pDynamicState = &dynamicState;
+    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+    pipelineInfo.pDepthStencilState = &maker.depthStencilTest;
+    
+    VK_CHECK_RESULT(vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
+                                              &m_landscapePipeline.pipeline));
+    
+    for (size_t i = 0; i < shader_paths.size(); ++i) {
+      if (maker.shaderModules[i] != VK_NULL_HANDLE)
+        vkDestroyShaderModule(m_device, maker.shaderModules[i], VK_NULL_HANDLE);
+      maker.shaderModules[i] = VK_NULL_HANDLE;
+    }
+  }
+  
+  if (m_pScnMgr->InstancesNum() > 0) {
+    vk_utils::GraphicsPipelineMaker maker;
+  
+    std::unordered_map<VkShaderStageFlagBits, std::string> shader_paths;
+    shader_paths[VK_SHADER_STAGE_FRAGMENT_BIT] = FRAGMENT_SHADER_PATH_FILL + ".spv";
+    if (make_geom) {
       shader_paths[VK_SHADER_STAGE_GEOMETRY_BIT] = GEOMETRY_SHADER_PATH + ".spv";
+    }
+    shader_paths[VK_SHADER_STAGE_VERTEX_BIT] = VERTEX_SHADER_PATH_FILL + ".spv";
+    maker.LoadShaders(m_device, shader_paths);
+    
+    m_fillForwardPipeline.layout = maker.MakeLayout(m_device, {m_fill_dSetLayout}, sizeof(resolveConst));
+    maker.SetDefaultState(m_width, m_height);
+
+
+    std::array<VkPipelineColorBlendAttachmentState, m_gbuf_size - 1> blendStates{};
+    VkPipelineColorBlendAttachmentState defaultState{};
+    defaultState.blendEnable = VK_FALSE;
+    defaultState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    blendStates.fill(defaultState);
+    
+    maker.colorBlending.attachmentCount = blendStates.size();
+    maker.colorBlending.pAttachments = blendStates.data();
+    
+    m_fillForwardPipeline.pipeline = maker.MakePipeline(m_device, m_pScnMgr->GetPipelineVertexInputStateCreateInfo(),
+                                                        m_screenRenderPass,
+                                                        {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR});
   }
-  shader_paths[VK_SHADER_STAGE_VERTEX_BIT]   = VERTEX_SHADER_PATH_FILL + ".spv";
-  maker.LoadShaders(m_device, shader_paths);
-
-  m_fillForwardPipeline.layout = maker.MakeLayout(m_device, {m_fill_dSetLayout}, sizeof(resolveConst));
-  maker.SetDefaultState(m_width, m_height);
-
-  std::array<VkPipelineColorBlendAttachmentState, m_gbuf_size - 1> blendStates{};
-  VkPipelineColorBlendAttachmentState defaultState{};
-  defaultState.blendEnable = VK_FALSE;
-  defaultState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-  blendStates.fill(defaultState);
-
-  maker.colorBlending.attachmentCount = blendStates.size();
-  maker.colorBlending.pAttachments = blendStates.data();
-
-  m_fillForwardPipeline.pipeline = maker.MakePipeline(m_device, m_pScnMgr->GetPipelineVertexInputStateCreateInfo(),
-                                                       m_screenRenderPass, {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR});
-
-  shader_paths[VK_SHADER_STAGE_FRAGMENT_BIT] = FRAGMENT_SHADER_PATH_RESOLVE + ".spv";
-  shader_paths[VK_SHADER_STAGE_GEOMETRY_BIT] = GEOMETRY_SHADER_PATH_RESOLVE + ".spv";
-  shader_paths[VK_SHADER_STAGE_VERTEX_BIT]   = VERTEX_SHADER_PATH_RESOLVE + ".spv";
-  maker.LoadShaders(m_device, shader_paths);
-
-  m_resolveForwardPipeline.layout = maker.MakeLayout(m_device, {m_light_dSetLayout, m_resolve_dSetLayout}, sizeof(resolveConst));
-  maker.SetDefaultState(m_width, m_height);
-  maker.depthStencilTest.depthTestEnable = false;
-  maker.colorBlendAttachments = {VkPipelineColorBlendAttachmentState{.blendEnable = VK_TRUE,
-                                                                     .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-                                                                     .dstColorBlendFactor = VK_BLEND_FACTOR_ONE,
-                                                                     .colorBlendOp = VK_BLEND_OP_ADD,
-                                                                     .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                                                                                       VK_COLOR_COMPONENT_G_BIT |
-                                                                                       VK_COLOR_COMPONENT_B_BIT}};
   
-  VkPipelineVertexInputStateCreateInfo vertexLayout = {};
-  vertexLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  vertexLayout.vertexBindingDescriptionCount = 0;
-  vertexLayout.vertexAttributeDescriptionCount = 0;
+  {
+    vk_utils::GraphicsPipelineMaker maker;
   
-  m_resolveForwardPipeline.pipeline = maker.MakePipeline(m_device, vertexLayout,
-                                                         m_screenRenderPass, {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR},
-                                                         vk_utils::IA_PList(), 1);
-
-  vk_utils::ComputePipelineMaker comp_maker;
-  comp_maker.LoadShader(m_device, COMPUTE_SHADER_PATH + ".spv");
-
-  m_computeForwardPipeline.layout = comp_maker.MakeLayout(m_device, { m_comp_dSetLayout }, sizeof(comp_pushConst));
-  m_computeForwardPipeline.pipeline = comp_maker.MakePipeline(m_device);
+    std::unordered_map<VkShaderStageFlagBits, std::string> shader_paths;
+    shader_paths[VK_SHADER_STAGE_FRAGMENT_BIT] = FRAGMENT_SHADER_PATH_RESOLVE + ".spv";
+    shader_paths[VK_SHADER_STAGE_GEOMETRY_BIT] = GEOMETRY_SHADER_PATH_RESOLVE + ".spv";
+    shader_paths[VK_SHADER_STAGE_VERTEX_BIT] = VERTEX_SHADER_PATH_RESOLVE + ".spv";
+    maker.LoadShaders(m_device, shader_paths);
+    
+    m_resolveForwardPipeline.layout = maker.MakeLayout(m_device, {m_light_dSetLayout, m_resolve_dSetLayout},
+                                                       sizeof(resolveConst));
+    maker.SetDefaultState(m_width, m_height);
+    maker.depthStencilTest.depthTestEnable = false;
+    maker.colorBlendAttachments = {VkPipelineColorBlendAttachmentState{.blendEnable = VK_TRUE,
+            .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+            .dstColorBlendFactor = VK_BLEND_FACTOR_ONE,
+            .colorBlendOp = VK_BLEND_OP_ADD,
+            .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+                              VK_COLOR_COMPONENT_G_BIT |
+                              VK_COLOR_COMPONENT_B_BIT}};
+  
+    VkPipelineVertexInputStateCreateInfo vertexLayout = {};
+    vertexLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexLayout.vertexBindingDescriptionCount = 0;
+    vertexLayout.vertexAttributeDescriptionCount = 0;
+    
+    m_resolveForwardPipeline.pipeline = maker.MakePipeline(m_device, vertexLayout,
+                                                           m_screenRenderPass,
+                                                           {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR},
+                                                           vk_utils::IA_PList(), 1);
+  }
+  
+  if (m_pScnMgr->InstancesNum() > 0) {
+    vk_utils::ComputePipelineMaker comp_maker;
+    comp_maker.LoadShader(m_device, COMPUTE_SHADER_PATH + ".spv");
+    
+    m_computeForwardPipeline.layout = comp_maker.MakeLayout(m_device, {m_comp_dSetLayout}, sizeof(comp_pushConst));
+    m_computeForwardPipeline.pipeline = comp_maker.MakePipeline(m_device);
+  }
 }
 
 void SimpleRender::CreateBuffers()
 {
-  iicommand_buffer = vk_utils::createBuffer(m_device,
-                                            m_pScnMgr->MeshesNum() * sizeof(VkDrawIndexedIndirectCommand),
-                                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
-  drawAtomic_buffer = vk_utils::createBuffer(m_device,
-                                             sizeof(uint32_t),
-                                             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-  drawMatrices_buffer = vk_utils::createBuffer(m_device,
-                                               m_pScnMgr->InstancesNum() * sizeof(LiteMath::float4x4),
+  if (m_pScnMgr->InstancesNum() > 0) {
+    iicommand_buffer = vk_utils::createBuffer(m_device,
+                                              m_pScnMgr->MeshesNum() * sizeof(VkDrawIndexedIndirectCommand),
+                                              VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+    drawAtomic_buffer = vk_utils::createBuffer(m_device,
+                                               sizeof(uint32_t),
                                                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-  m_buffers_memory = vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice,
-                                                          {iicommand_buffer, drawAtomic_buffer, drawMatrices_buffer}, 0);
+    drawMatrices_buffer = vk_utils::createBuffer(m_device,
+                                                 m_pScnMgr->InstancesNum() * sizeof(LiteMath::float4x4),
+                                                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+    m_buffers_memory = vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice,
+                                                            {iicommand_buffer, drawAtomic_buffer, drawMatrices_buffer},
+                                                            0);
+  }
 
   VkMemoryRequirements memReq;
   m_ubo = vk_utils::createBuffer(m_device, sizeof(m_uniforms), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &memReq);
@@ -420,6 +542,7 @@ void SimpleRender::CreateBuffers()
   vkMapMemory(m_device, m_uboAlloc, 0, sizeof(m_uniforms), 0, &m_uboMappedMem);
 
   //m_uniforms.lightPos = LiteMath::float3(0.0f, 1.0f, 1.0f);
+  m_uniforms.baseColor = LiteMath::float3(0.9f, 0.92f, 1.0f);
   m_uniforms.baseColor = LiteMath::float3(0.9f, 0.92f, 1.0f);
   m_uniforms.animateLightColor = true;
 
@@ -444,48 +567,52 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
   beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
 
   VK_CHECK_RESULT(vkBeginCommandBuffer(a_cmdBuff, &beginInfo));
-
-  vkCmdFillBuffer(a_cmdBuff, drawAtomic_buffer, 0, sizeof(uint), 0);
-
-  VkBufferMemoryBarrier barrier_atomic = {};
-  barrier_atomic.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-  barrier_atomic.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-  barrier_atomic.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-  barrier_atomic.buffer = drawAtomic_buffer;
-  barrier_atomic.offset = 0;
-  barrier_atomic.size = VK_WHOLE_SIZE;
-
-  vkCmdPipelineBarrier(a_cmdBuff, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                       {}, 0, nullptr, 1, &barrier_atomic, 0, nullptr);
-
-  vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, m_computeForwardPipeline.pipeline);
-  vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, m_computeForwardPipeline.layout, 0, 1,
-                          &m_comp_dSet, 0, VK_NULL_HANDLE);
-  comp_pushConst.instance_count = m_pScnMgr->InstancesNum();
-  vkCmdPushConstants(a_cmdBuff, m_computeForwardPipeline.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(comp_pushConst),
-                     &comp_pushConst);
-  vkCmdDispatch(a_cmdBuff, m_pScnMgr->MeshesNum(), 1, 1);
-
-  VkBufferMemoryBarrier barrier_command = {};
-  barrier_command.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-  barrier_command.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-  barrier_command.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
-  barrier_command.buffer = iicommand_buffer;
-  barrier_command.offset = 0;
-  barrier_command.size = VK_WHOLE_SIZE;
-
-  VkBufferMemoryBarrier barrier_matrix = {};
-  barrier_matrix.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-  barrier_matrix.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-  barrier_matrix.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-  barrier_matrix.buffer = drawMatrices_buffer;
-  barrier_matrix.offset = 0;
-  barrier_matrix.size = VK_WHOLE_SIZE;
-
-  std::array barriers = {barrier_command, barrier_matrix};
-
-  vkCmdPipelineBarrier(a_cmdBuff, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
-                       {}, 0, nullptr, barriers.size(), barriers.data(), 0, nullptr);
+  
+  if (m_pScnMgr->InstancesNum() > 0) {
+    vkCmdFillBuffer(a_cmdBuff, drawAtomic_buffer, 0, sizeof(uint), 0);
+    
+    VkBufferMemoryBarrier barrier_atomic = {};
+    barrier_atomic.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    barrier_atomic.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier_atomic.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    barrier_atomic.buffer = drawAtomic_buffer;
+    barrier_atomic.offset = 0;
+    barrier_atomic.size = VK_WHOLE_SIZE;
+    
+    vkCmdPipelineBarrier(a_cmdBuff, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         {}, 0, nullptr, 1, &barrier_atomic, 0, nullptr);
+    
+    vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, m_computeForwardPipeline.pipeline);
+    vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, m_computeForwardPipeline.layout, 0, 1,
+                            &m_comp_dSet, 0, VK_NULL_HANDLE);
+    comp_pushConst.instance_count = m_pScnMgr->InstancesNum();
+    vkCmdPushConstants(a_cmdBuff, m_computeForwardPipeline.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                       sizeof(comp_pushConst),
+                       &comp_pushConst);
+    vkCmdDispatch(a_cmdBuff, m_pScnMgr->MeshesNum(), 1, 1);
+    
+    VkBufferMemoryBarrier barrier_command = {};
+    barrier_command.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    barrier_command.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    barrier_command.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+    barrier_command.buffer = iicommand_buffer;
+    barrier_command.offset = 0;
+    barrier_command.size = VK_WHOLE_SIZE;
+    
+    VkBufferMemoryBarrier barrier_matrix = {};
+    barrier_matrix.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    barrier_matrix.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    barrier_matrix.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    barrier_matrix.buffer = drawMatrices_buffer;
+    barrier_matrix.offset = 0;
+    barrier_matrix.size = VK_WHOLE_SIZE;
+    
+    std::array barriers = {barrier_command, barrier_matrix};
+    
+    vkCmdPipelineBarrier(a_cmdBuff, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+                         {}, 0, nullptr, barriers.size(), barriers.data(), 0, nullptr);
+  }
 
   vk_utils::setDefaultViewport(a_cmdBuff, static_cast<float>(m_width), static_cast<float>(m_height));
   vk_utils::setDefaultScissor(a_cmdBuff, m_width, m_height);
@@ -510,29 +637,40 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
     renderPassInfo.pClearValues = clearValues.data();
 
     vkCmdBeginRenderPass(a_cmdBuff, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_fillForwardPipeline.pipeline);
-
-    vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_fillForwardPipeline.layout, 0, 1,
-                            &m_fill_dSet, 0, VK_NULL_HANDLE);
-
-    VkShaderStageFlags stageFlags = (VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-    if(make_geom)
+  
+    vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_landscapePipeline.pipeline);
+    vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_landscapePipeline.layout, 0, 1,
+                            &m_landscape_dSet, 0, VK_NULL_HANDLE);
+    
+    VkShaderStageFlags stageFlags = (VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT |
+            VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    vkCmdPushConstants(a_cmdBuff, m_landscapePipeline.layout, stageFlags, 0, sizeof(resolveConst), &resolveConst);
+  
+    vkCmdDraw(a_cmdBuff, 4, 1, 0, 0);
+  
+    if (m_pScnMgr->InstancesNum() > 0) {
+      vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_fillForwardPipeline.pipeline);
+      vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_fillForwardPipeline.layout, 0, 1,
+                              &m_fill_dSet, 0, VK_NULL_HANDLE);
+    
+      stageFlags = (VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+      if (make_geom)
         stageFlags = (stageFlags | VK_SHADER_STAGE_GEOMETRY_BIT);
-
-    VkDeviceSize zero_offset = 0u;
-    VkBuffer vertexBuf = m_pScnMgr->GetVertexBuffer();
-    VkBuffer indexBuf = m_pScnMgr->GetIndexBuffer();
-
-    vkCmdBindVertexBuffers(a_cmdBuff, 0, 1, &vertexBuf, &zero_offset);
-    vkCmdBindIndexBuffer(a_cmdBuff, indexBuf, 0, VK_INDEX_TYPE_UINT32);
-
-    vkCmdPushConstants(a_cmdBuff, m_fillForwardPipeline.layout, stageFlags, 0,
-                       sizeof(resolveConst), &resolveConst);
-
-    vkCmdDrawIndexedIndirect(a_cmdBuff, iicommand_buffer, 0,
-                             m_pScnMgr->MeshesNum(),
-                             sizeof(VkDrawIndexedIndirectCommand));
-
+    
+      VkDeviceSize zero_offset = 0u;
+      VkBuffer vertexBuf = m_pScnMgr->GetVertexBuffer();
+      VkBuffer indexBuf = m_pScnMgr->GetIndexBuffer();
+    
+      vkCmdBindVertexBuffers(a_cmdBuff, 0, 1, &vertexBuf, &zero_offset);
+      vkCmdBindIndexBuffer(a_cmdBuff, indexBuf, 0, VK_INDEX_TYPE_UINT32);
+    
+      vkCmdPushConstants(a_cmdBuff, m_fillForwardPipeline.layout, stageFlags, 0,
+                         sizeof(resolveConst), &resolveConst);
+    
+      vkCmdDrawIndexedIndirect(a_cmdBuff, iicommand_buffer, 0,
+                               m_pScnMgr->MeshesNum(),
+                               sizeof(VkDrawIndexedIndirectCommand));
+    }
     vkCmdNextSubpass(a_cmdBuff, VK_SUBPASS_CONTENTS_INLINE);
 
     vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_resolveForwardPipeline.pipeline);
@@ -715,7 +853,23 @@ void SimpleRender::Cleanup()
     vkDestroyPipelineLayout(m_device, m_computeForwardPipeline.layout, nullptr);
     m_computeForwardPipeline.layout = VK_NULL_HANDLE;
   }
-
+  
+  if (m_landscape_sampler != VK_NULL_HANDLE)
+  {
+    vkDestroySampler(m_device, m_landscape_sampler, nullptr);
+    m_landscape_sampler = VK_NULL_HANDLE;
+  }
+  if(m_landscapePipeline.layout != VK_NULL_HANDLE)
+  {
+    vkDestroyPipelineLayout(m_device, m_landscapePipeline.layout, nullptr);
+    m_landscapePipeline.layout = VK_NULL_HANDLE;
+  }
+  if(m_landscapePipeline.pipeline != VK_NULL_HANDLE)
+  {
+    vkDestroyPipeline(m_device, m_landscapePipeline.pipeline, nullptr);
+    m_landscapePipeline.pipeline = VK_NULL_HANDLE;
+  }
+  
   if (m_presentationResources.imageAvailable != VK_NULL_HANDLE)
   {
     vkDestroySemaphore(m_device, m_presentationResources.imageAvailable, nullptr);
@@ -778,7 +932,7 @@ void SimpleRender::ProcessInput(const AppInput &input)
 #ifdef WIN32
     std::system("cd ../resources/shaders && python compile_simple_render_shaders.py");
 #else
-    std::system("cd ../resources/shaders && python3 compile_deffered_shaders.py");
+    std::system("cd ../resources/shaders && python3 compile_landscape_shaders.py");
 #endif
 
     SetupSimplePipeline();
@@ -818,6 +972,8 @@ void SimpleRender::UpdateView()
 void SimpleRender::LoadScene(const char* path, bool transpose_inst_matrices)
 {
   m_pScnMgr->LoadSceneXML(path, transpose_inst_matrices);
+  m_pScnMgr->CleanScene();
+  m_pScnMgr->GenerateLandscapeTex(m_landscape_width, m_landscape_height);
 
   CreateBuffers();
   SetupSimplePipeline();
