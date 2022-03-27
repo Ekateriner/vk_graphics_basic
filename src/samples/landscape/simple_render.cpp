@@ -69,7 +69,7 @@ void SimpleRender::InitVulkan(const char** a_instanceExtensions, uint32_t a_inst
                                              m_queueFamilyIDXs.graphics, false);
 }
 
-void SimpleRender::InitPresentation(VkSurfaceKHR &a_surface)
+void SimpleRender::InitPresentation(VkSurfaceKHR &a_surface, bool initGUI)
 {
   m_surface = a_surface;
 
@@ -108,8 +108,9 @@ void SimpleRender::InitPresentation(VkSurfaceKHR &a_surface)
                                   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &m_tangentBuffer);
   CreateRenderpass();
   CreateFrameBuffer();
-
-  m_pGUIRender = std::make_shared<ImGuiRender>(m_instance, m_device, m_physicalDevice, m_queueFamilyIDXs.graphics, m_graphicsQueue, m_swapchain);
+  
+  if(initGUI)
+    m_pGUIRender = std::make_shared<ImGuiRender>(m_instance, m_device, m_physicalDevice, m_queueFamilyIDXs.graphics, m_graphicsQueue, m_swapchain);
   
   m_landscape_sampler = vk_utils::createSampler(
           m_device, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
@@ -814,8 +815,10 @@ void SimpleRender::RecreateSwapChain()
 
 void SimpleRender::Cleanup()
 {
-  m_pGUIRender = nullptr;
-  ImGui::DestroyContext();
+  if (m_pGUIRender) {
+    m_pGUIRender = nullptr;
+    ImGui::DestroyContext();
+  }
   CleanupPipelineAndSwapchain();
   if(m_surface != VK_NULL_HANDLE)
   {
