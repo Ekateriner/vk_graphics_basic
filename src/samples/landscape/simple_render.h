@@ -31,6 +31,9 @@ public:
   const std::string COMPUTE_SHADER_PATH = "../resources/shaders/frustum_cul.comp";
   const std::string GEOMETRY_SHADER_PATH = "../resources/shaders/hair.geom";
   
+  const std::string VERTEX_SHADER_PATH_POSTE = "../resources/shaders/quad3_vert.vert";
+  const std::string FRAGMENT_SHADER_PATH_POSTE = "../resources/shaders/post_effects.frag";
+  
   SimpleRender(uint32_t a_width, uint32_t a_height);
   ~SimpleRender()  { Cleanup(); };
 
@@ -125,6 +128,7 @@ protected:
   pipeline_data_t m_resolveForwardPipeline {};
   pipeline_data_t m_computeForwardPipeline {};
   pipeline_data_t m_landscapePipeline {};
+  pipeline_data_t m_postEPipeline {};
 
   VkDescriptorSet m_fill_dSet = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_fill_dSetLayout = VK_NULL_HANDLE;
@@ -132,12 +136,16 @@ protected:
   VkDescriptorSetLayout m_resolve_dSetLayout = VK_NULL_HANDLE;
   VkDescriptorSet m_light_dSet = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_light_dSetLayout = VK_NULL_HANDLE;
-  VkRenderPass m_screenRenderPass = VK_NULL_HANDLE; // main renderpass
+  VkDescriptorSet m_postE_dSet = VK_NULL_HANDLE;
+  VkDescriptorSetLayout m_postE_dSetLayout = VK_NULL_HANDLE;
+  VkRenderPass m_mainRenderPass = VK_NULL_HANDLE; // main renderpass
+  VkFramebuffer m_mainFrameBuffer;
+  VkRenderPass m_postRenderPass = VK_NULL_HANDLE; // post renderpass
   
   VkDescriptorSet m_landscape_dSet = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_landscape_dSetLayout = VK_NULL_HANDLE;
   
-  VkSampler m_landscape_sampler = VK_NULL_HANDLE;
+  VkSampler m_simple_image_sampler = VK_NULL_HANDLE;
   
   VkDescriptorSet m_comp_dSet = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_comp_dSetLayout = VK_NULL_HANDLE;
@@ -148,12 +156,14 @@ protected:
   // *** presentation
   VkSurfaceKHR m_surface = VK_NULL_HANDLE;
   VulkanSwapChain m_swapchain;
-  std::vector<VkFramebuffer> m_frameBuffers;
+  std::vector<VkFramebuffer> m_screenFrameBuffers;
   vk_utils::VulkanImageMem m_depthBuffer{};
   vk_utils::VulkanImageMem m_normalBuffer{};
   vk_utils::VulkanImageMem m_albedoBuffer{};
   vk_utils::VulkanImageMem m_tangentBuffer{};
   static constexpr uint32_t m_gbuf_size = 4;
+  
+  vk_utils::VulkanImageMem m_resultImageBuffer{};
   // ***
 
   // *** GUI

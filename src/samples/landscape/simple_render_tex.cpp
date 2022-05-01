@@ -27,7 +27,7 @@ void SimpleRenderTexture::LoadScene(const char* path, bool transpose_inst_matric
 
   for (uint32_t i = 0; i < m_framesInFlight; ++i)
   {
-    BuildCommandBufferSimple(m_cmdBuffersDrawMain[i], m_frameBuffers[i]);
+    BuildCommandBufferSimple(m_cmdBuffersDrawMain[i], m_screenFrameBuffers[i]);
   }
 }
 
@@ -102,7 +102,7 @@ void SimpleRenderTexture::SetupSimplePipeline()
   maker.SetDefaultState(m_width, m_height);
 
   m_fillForwardPipeline.pipeline = maker.MakePipeline(m_device, m_pScnMgr->GetPipelineVertexInputStateCreateInfo(),
-    m_screenRenderPass, {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR});
+    m_postRenderPass, {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR});
 }
 
 void SimpleRenderTexture::DrawFrame(float a_time, DrawMode a_mode)
@@ -144,7 +144,7 @@ void SimpleRenderTexture::ProcessInput(const AppInput &input)
 
     for (uint32_t i = 0; i < m_framesInFlight; ++i)
     {
-      BuildCommandBufferSimple(m_cmdBuffersDrawMain[i], m_frameBuffers[i]);
+      BuildCommandBufferSimple(m_cmdBuffersDrawMain[i], m_screenFrameBuffers[i]);
     }
   }
 

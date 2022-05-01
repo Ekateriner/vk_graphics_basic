@@ -39,7 +39,7 @@ layout(binding = 1, set = 0) uniform land_info
 layout (binding = 2) uniform sampler2D heightMap;
 
 float eps = 0.001f;
-int hits = 30;
+int hits = 20;
 
 void main()
 {
