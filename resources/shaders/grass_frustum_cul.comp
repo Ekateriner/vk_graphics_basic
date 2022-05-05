@@ -4,7 +4,8 @@ const uint thread_count = 32;
 layout( local_size_x = 32 ) in;
 
 layout( push_constant ) uniform params {
-    mat4 mProjView;
+    mat4 mProj;
+    mat4 mView;
 } PushConstant;
 
 layout(binding = 0, set = 0) uniform land_info
@@ -75,13 +76,12 @@ void main() {
                                0, 0, scale.z, 0,
                                trans.x, trans.y, trans.z, 1.0);
 
-            int tile_i = int(mod(instance_idx, tile_count.x));
-            int tile_j = int(instance_idx / tile_count.x);
-            float mean_height = (trans.y + (scale.y + trans.y)) / 2;
+            int tile_i = int(instance_idx / tile_count.x);
+            int tile_j = int(mod(instance_idx, tile_count.x));
             vec4 shift = vec4(tile_i * 1.0 / tile_count.x, 0.0, tile_j * 1.0 / tile_count.y, 0.0f);
 
             for(uint j = 0; j < 8; j++) {
-                vec4 proj = PushConstant.mProjView * mModel * (bbox_vert[j] + shift);
+                vec4 proj = PushConstant.mProj * PushConstant.mView * mModel * (bbox_vert[j] + shift);
                 proj = proj / abs(proj.w);
 
                 left = left && (proj.y < -size);
@@ -95,8 +95,8 @@ void main() {
             }
 
             if (!left && !right && !up && !down && !behind && !forward) {
-                vec4 instance_pos = PushConstant.mProjView * mModel * (shift + vec4(0.5/tile_count.x, mean_height, 0.5/tile_count.y, 0));
-                float depth = abs(instance_pos.z);
+                vec4 instance_pos = PushConstant.mView * mModel * (shift + vec4(0.5/tile_count.x, 0.5, 0.5/tile_count.y, 1.0));
+                float depth = length(instance_pos.xyz);
 
                 uvec2 freq;
                 if (depth <= nearfar.x) {

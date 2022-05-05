@@ -482,9 +482,9 @@ void SceneManager::GenerateLandscapeTex(int width, int height) {
     
     vkMapMemory(m_device, m_grassMemAlloc, 0, sizeof(GrassInfo), 0, &m_grassMappedMem);
     m_grass_info.tile_count = uint2(32, 32);
-    m_grass_info.near_far = float2(40.0, 80.0);
-    m_grass_info.freq_min = uint2(5, 5);
-    m_grass_info.freq_max = uint2(25, 25);
+    m_grass_info.near_far = float2(10.0, 30.0);
+    m_grass_info.freq_min = uint2(0, 0);
+    m_grass_info.freq_max = uint2(15, 15);
     //m_grass_info.coef = float2(0.34, 0.21);
     
     memcpy(m_grassMappedMem, &m_grass_info, sizeof(GrassInfo));
@@ -495,7 +495,7 @@ void SceneManager::GenerateLandscapeTex(int width, int height) {
     {
             { {  0.01f,  0.0f, 0.0f } },
             { { -0.01f,  0.0f, 0.0f } },
-            { {  0.0f,  0.1f, 0.0f } }
+            { {  0.0f,  0.2f, 0.0f } }
     };
   
     std::vector<uint32_t> indices = { 0, 1, 2 };

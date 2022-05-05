@@ -116,11 +116,6 @@ protected:
       LiteMath::float4x4 projView;
       uint32_t instance_count;
   } comp_pushConst;
-  
-  struct
-  {
-    LiteMath::float4x4 projView;
-  } grass_pushConst;
 
   VkBuffer iicommand_buffer;
   VkBuffer drawAtomic_buffer;

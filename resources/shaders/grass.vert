@@ -52,6 +52,9 @@ out gl_PerVertex {
 
 layout (location = 0 ) out VS_OUT
 {
+    vec3 Pos;
+    vec3 Norm;
+    vec3 Tangent;
     vec2 texCoord;
 } vOut;
 
@@ -60,16 +63,27 @@ void main(void)
     //vec2 s = textureLod(grassMap, mod(shift.xy, 1.0f / tile_count) * tile_count, 0).xz;
     vec2 shift = shifts_buf[gl_InstanceIndex];
     vec2 coord = mod(shift.xy, 1.0f / tile_count) * tile_count * 1.0 / 2.0;
-    vec2 s = vec2(textureLod(grassMap, coord, 0).x, textureLod(grassMap, coord + 1.0 / 2.0, 0).x);
+    float rotation = textureLod(grassMap, coord + vec2(0.0, 0.5), 0).x * 2 * 3.1415926;
+    mat3 rot_mat = mat3(cos(rotation), 0.0, -sin(rotation),
+                        0.0, 1.0, 0.0,
+                        sin(rotation), 0.0, cos(rotation));
+
+    vec2 s = vec2(textureLod(grassMap, coord, 0).x, textureLod(grassMap, coord + 0.5, 0).x) - 0.5;
     vOut.texCoord = shift + s / scale.xz;
 
-    mat4 mModel = params.mView * mat4(scale.x, 0, 0, 0,
-                                      0, scale.y, 0, 0,
-                                      0, 0, scale.z, 0,
-                                      trans.x, trans.y, trans.z, 1.0);
+    // borders
+    vOut.texCoord.x = clamp(vOut.texCoord.x, 0.0, 1.0);
+    vOut.texCoord.y = clamp(vOut.texCoord.y, 0.0, 1.0);
 
-    vec3 cShift    = (mModel * vec4(vOut.texCoord.x, textureLod(heightMap, vOut.texCoord.xy, 0).x, vOut.texCoord.y, 1.0f)).xyz;
-    vec3 cPos      = vPos + cShift;
+    mat4 mModel = mat4(scale.x, 0, 0, 0,
+                       0, scale.y, 0, 0,
+                       0, 0, scale.z, 0,
+                       trans.x, trans.y, trans.z, 1.0);
 
-    gl_Position   = vec4(cPos, 1.0);
+    vec3 wShift    = (mModel * vec4(vOut.texCoord.x, textureLod(heightMap, vOut.texCoord.xy, 0).x, vOut.texCoord.y, 1.0f)).xyz;
+    vOut.Pos      = vec3(params.mView * vec4(rot_mat * vPos + wShift, 1.0f));
+    vOut.Norm      = normalize(mat3(transpose(inverse(params.mView * mModel))) * rot_mat * vec3(0.0, 0.0, 1.0));
+    vOut.Tangent   = normalize(mat3(transpose(inverse(params.mView * mModel))) * rot_mat * vec3(0.0, 1.0, 0.0));
+
+    gl_Position   = params.mProj * vec4(vOut.Pos, 1.0);
 }

@@ -665,7 +665,7 @@ void SimpleRender::SetupSimplePipeline()
     vk_utils::ComputePipelineMaker comp_maker;
     comp_maker.LoadShader(m_device, COMPUTE_SHADER_PATH_GRASS + ".spv");
   
-    m_grass_compPipeline.layout = comp_maker.MakeLayout(m_device, {m_grass_comp_dSetLayout}, sizeof(grass_pushConst));
+    m_grass_compPipeline.layout = comp_maker.MakeLayout(m_device, {m_grass_comp_dSetLayout}, sizeof(resolveConst));
     m_grass_compPipeline.pipeline = comp_maker.MakePipeline(m_device);
   
     
@@ -893,7 +893,7 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
     vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, m_grass_compPipeline.layout, 0, 1,
                             &m_grass_comp_dSet, 0, VK_NULL_HANDLE);
     vkCmdPushConstants(a_cmdBuff, m_grass_compPipeline.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                       sizeof(grass_pushConst), &grass_pushConst);
+                       sizeof(resolveConst), &resolveConst);
     vkCmdDispatch(a_cmdBuff, 1, 1, 1);
   
     VkBufferMemoryBarrier barrier_command = {};
@@ -1394,7 +1394,6 @@ void SimpleRender::UpdateView()
   auto mLookAt         = LiteMath::lookAt(m_cam.pos, m_cam.lookAt, m_cam.up);
   auto mWorldViewProj  = mProjFix * mProj * mLookAt;
   comp_pushConst.projView = mWorldViewProj;
-  grass_pushConst.projView = mWorldViewProj;
   resolveConst.Proj = mProjFix * mProj;
   resolveConst.View = mLookAt;
 }

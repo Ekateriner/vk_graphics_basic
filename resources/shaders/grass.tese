@@ -41,28 +41,35 @@ layout (binding = 5) uniform sampler2D grassMap;
 
 layout (location = 0 ) in TCS_OUT
 {
+    vec3 Pos;
+    vec3 Norm;
+    vec3 Tangent;
     vec2 texCoord;
 } tcOut[];
 
-vec4 wind_dir = vec4(0.0, 0.0, 10.0, 0.0);
+layout (location = 0 ) out TES_OUT
+{
+    vec3 Norm;
+    vec3 Tangent;
+} teOut;
+
+vec3 wind_dir = vec3(0.0, 0.0, 5.0);
 
 void main() {
-//    vec3 p0 = gl_TessCoord.x * tcPosition[0];
-//    vec3 p1 = gl_TessCoord.y * tcPosition[1];
-//    vec3 p2 = gl_TessCoord.z * tcPosition[2];
-//
-//    tePosition = normalize(p0 + p1 + p2);
     mat4 mModel = params.mView * mat4(scale.x, 0, 0, 0,
                                       0, scale.y, 0, 0,
                                       0, 0, scale.z, 0,
                                       trans.x, trans.y, trans.z, 1.0);
 
-    vec4 cPos = (gl_TessCoord.x * gl_in [0].gl_Position +
-                 gl_TessCoord.y * gl_in [1].gl_Position +
-                 gl_TessCoord.z * gl_in [2].gl_Position);
+    vec3 cPos = (gl_TessCoord.x * tcOut[0].Pos +
+                 gl_TessCoord.y * tcOut[1].Pos +
+                 gl_TessCoord.z * tcOut[2].Pos);
 
     float height_pos = cPos.y - (mModel * vec4(tcOut[0].texCoord.x, textureLod(heightMap, tcOut[0].texCoord.xy, 0).x, tcOut[0].texCoord.y, 1.0f)).y;
+
+    teOut.Norm = tcOut[0].Norm;
+    teOut.Tangent = tcOut[0].Tangent;
     cPos += pow(height_pos, 2) * wind_dir * sin(Params.time);
 
-    gl_Position = params.mProj * cPos;
+    gl_Position = params.mProj * vec4(cPos, 1.0f);
 }
