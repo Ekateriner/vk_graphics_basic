@@ -59,6 +59,14 @@ struct LandscapeInfo
     int height;
 };
 
+struct GrassInfo
+{
+  uint2 tile_count;
+  float2 near_far;
+  uint2 freq_min;
+  uint2 freq_max;
+};
+
 struct SceneManager
 {
   SceneManager(VkDevice a_device, VkPhysicalDevice a_physDevice, uint32_t a_transferQId, uint32_t a_graphicsQId,
@@ -84,13 +92,19 @@ struct SceneManager
   void UpdateGeoDataOnGPU();
 
   VkPipelineVertexInputStateCreateInfo GetPipelineVertexInputStateCreateInfo() { return m_pMeshData->VertexInputLayout();}
+  VkPipelineVertexInputStateCreateInfo GetGrassPipelineVertexInputStateCreateInfo() { return m_grass_vertexInputInfo;}
 
   VkBuffer GetVertexBuffer() const { return m_geoVertBuf; }
   VkBuffer GetIndexBuffer()  const { return m_geoIdxBuf; }
+  VkBuffer GetGrassVertexBuffer() const { return m_grassVertBuf; }
+  VkBuffer GetGrassIndexBuffer()  const { return m_grassIdxBuf; }
   VkBuffer GetMeshInfoBuffer()  const { return m_meshInfoBuf; }
   VkBuffer GetInstanceInfoBuffer()  const { return m_instanceInfoBuf; }
   VkBuffer GetLightInfoBuffer()  const { return m_lightInfoBuf; }
   VkBuffer GetLandInfoBuffer()  const { return m_landInfoBuf; }
+  VkBuffer GetGrassInfoBuffer()  const { return m_grassInfoBuf; }
+  uint32_t GrassTilesNum() const {return (uint32_t)m_grass_info.tile_count.x * m_grass_info.tile_count.y;}
+  uint32_t GrassMaxCount() const {return (uint32_t)m_grass_info.freq_max.x * m_grass_info.freq_max.y;}
   std::shared_ptr<vk_utils::ICopyEngine> GetCopyHelper() { return  m_pCopyHelper; }
 
   uint32_t MeshesNum() const {return (uint32_t)m_meshInfos.size();}
@@ -107,6 +121,7 @@ struct SceneManager
   LiteMath::float4x4 GetInstanceMatrix(uint32_t instId) const {assert(instId < m_instanceInfos.size()); return m_instanceInfos[instId].Matrix;}
   LiteMath::Box4f GetSceneBbox() const {return sceneBbox;}
   vk_utils::VulkanImageMem GetHeightMap() const { return m_height_map; }
+  vk_utils::VulkanImageMem GetGrassMap() const { return m_grass_map; }
 
 private:
   void LoadGeoDataOnGPU();
@@ -124,11 +139,24 @@ private:
   //uint32_t lightCount;
   uint32_t lightGridSize = 10;
   LiteMath::Box4f sceneBbox;
+  
   vk_utils::VulkanImageMem m_height_map;
   LandscapeInfo m_land_info = {};
   VkBuffer m_landInfoBuf = VK_NULL_HANDLE;
   void* m_landMappedMem = nullptr;
   VkDeviceMemory m_landMemAlloc = VK_NULL_HANDLE;
+  
+  GrassInfo m_grass_info = {};
+  VkBuffer m_grassInfoBuf = VK_NULL_HANDLE;
+  void* m_grassMappedMem = nullptr;
+  VkDeviceMemory m_grassMemAlloc = VK_NULL_HANDLE;
+  VkBuffer m_grassVertBuf = VK_NULL_HANDLE;
+  VkBuffer m_grassIdxBuf  = VK_NULL_HANDLE;
+  VkDeviceMemory m_grassMeshMemAlloc = VK_NULL_HANDLE;
+  VkVertexInputBindingDescription   m_grass_inputBinding {};
+  VkVertexInputAttributeDescription m_grass_inputAttributes {};
+  VkPipelineVertexInputStateCreateInfo m_grass_vertexInputInfo = {};
+  vk_utils::VulkanImageMem m_grass_map;
 
   uint32_t m_totalVertices = 0u;
   uint32_t m_totalIndices  = 0u;

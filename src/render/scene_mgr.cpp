@@ -4,6 +4,7 @@
 #include "vk_utils.h"
 #include "vk_buffers.h"
 #include "brown_gen.h"
+#include "blue_gen.h"
 //#include <random>
 #include "../loader_utils/hydraxml.h"
 
@@ -34,9 +35,9 @@ SceneManager::SceneManager(VkDevice a_device, VkPhysicalDevice a_physDevice,
 
 
 
-//  m_lightInfos.push_back({float4(1.0, 0.7, 0.4, 0.3),
-//                          float3(50.0, 50.0, 50.0),
-//                          float(100.0) });
+  m_lightInfos.push_back({float4(1.0, 0.7, 0.4, 0.3),
+                          float3(50.0, 50.0, 50.0),
+                          float(100.0) });
 
   for (uint32_t i = 0; i < lightGridSize; i++)
     for (uint32_t j = 0; j < lightGridSize; j++)
@@ -226,18 +227,15 @@ void SceneManager::LoadGeoDataOnGPU()
   VkDeviceSize indexBufSize = m_pMeshData->IndexDataSize();
   VkDeviceSize minfoBufSize = m_meshInfos.size() * sizeof(MeshInfoWithBbox);
   VkDeviceSize iinfoBufSize = m_instanceInfos.size() * sizeof(InstanceInfoWithMatrix);
-  VkDeviceSize linfoBufSize = m_lightInfos.size() * sizeof(LightInfo);
 
   m_geoVertBuf  = vk_utils::createBuffer(m_device, vertexBufSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   m_geoIdxBuf   = vk_utils::createBuffer(m_device, indexBufSize,  VK_BUFFER_USAGE_INDEX_BUFFER_BIT  | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   m_meshInfoBuf = vk_utils::createBuffer(m_device, minfoBufSize,   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-  m_lightInfoBuf = vk_utils::createBuffer(m_device, linfoBufSize,   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   m_instanceInfoBuf = vk_utils::createBuffer(m_device, iinfoBufSize,   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   
   VkMemoryAllocateFlags allocFlags {};
 
   m_geoMemAlloc = vk_utils::allocateAndBindWithPadding(m_device, m_physDevice, {m_geoVertBuf, m_geoIdxBuf, m_meshInfoBuf, m_instanceInfoBuf}, allocFlags);
-  m_lightMemAlloc = vk_utils::allocateAndBindWithPadding(m_device, m_physDevice, {m_lightInfoBuf}, allocFlags);
   
 //  std::vector<LiteMath::uint2> mesh_info_tmp;
 //  for(const auto& m : m_meshInfos)
@@ -251,7 +249,14 @@ void SceneManager::LoadGeoDataOnGPU()
   m_pCopyHelper->UpdateBuffer(m_geoIdxBuf,  0, m_pMeshData->IndexData(), indexBufSize);
   m_pCopyHelper->UpdateBuffer(m_meshInfoBuf, 0, m_meshInfos.data(), minfoBufSize);
   m_pCopyHelper->UpdateBuffer(m_instanceInfoBuf, 0, m_instanceInfos.data(), iinfoBufSize);
-  m_pCopyHelper->UpdateBuffer(m_lightInfoBuf, 0, m_lightInfos.data(), linfoBufSize);
+  
+  if (m_lightInfos.size() > 0) {
+    VkDeviceSize linfoBufSize = m_lightInfos.size() * sizeof(LightInfo);
+    m_lightInfoBuf = vk_utils::createBuffer(m_device, linfoBufSize,
+                                            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+    m_lightMemAlloc = vk_utils::allocateAndBindWithPadding(m_device, m_physDevice, {m_lightInfoBuf}, allocFlags);
+    m_pCopyHelper->UpdateBuffer(m_lightInfoBuf, 0, m_lightInfos.data(), linfoBufSize);
+  }
 }
 
 void SceneManager::UpdateGeoDataOnGPU()
@@ -308,6 +313,36 @@ void SceneManager::DestroyBuffers() {
     vkFreeMemory(m_device, m_landMemAlloc, nullptr);
     m_landMemAlloc = VK_NULL_HANDLE;
   }
+  
+  if(m_grassInfoBuf != VK_NULL_HANDLE)
+  {
+    vkDestroyBuffer(m_device, m_grassInfoBuf, nullptr);
+    m_grassInfoBuf = VK_NULL_HANDLE;
+  }
+  
+  if(m_grassMemAlloc != VK_NULL_HANDLE)
+  {
+    vkFreeMemory(m_device, m_grassMemAlloc, nullptr);
+    m_grassMemAlloc = VK_NULL_HANDLE;
+  }
+  
+  if(m_grassVertBuf != VK_NULL_HANDLE)
+  {
+    vkDestroyBuffer(m_device, m_grassVertBuf, nullptr);
+    m_grassVertBuf = VK_NULL_HANDLE;
+  }
+  
+  if(m_grassIdxBuf != VK_NULL_HANDLE)
+  {
+    vkDestroyBuffer(m_device, m_grassIdxBuf, nullptr);
+    m_grassIdxBuf = VK_NULL_HANDLE;
+  }
+  
+  if(m_grassMeshMemAlloc != VK_NULL_HANDLE)
+  {
+    vkFreeMemory(m_device, m_grassMeshMemAlloc, nullptr);
+    m_grassMeshMemAlloc = VK_NULL_HANDLE;
+  }
 
   if(m_geoMemAlloc != VK_NULL_HANDLE)
   {
@@ -328,6 +363,7 @@ void SceneManager::DestroyScene()
 
   m_pCopyHelper = nullptr;
   vk_utils::deleteImg(m_device, &m_height_map);
+  vk_utils::deleteImg(m_device, &m_grass_map);
 
   m_meshInfos.clear();
   m_pMeshData = nullptr;
@@ -384,36 +420,123 @@ void SceneManager::GenerateLandscapeTex(int width, int height) {
   }
   m_height_map = vk_utils::allocateColorTextureFromDataLDR(m_device, m_physDevice,
                                             reinterpret_cast<const unsigned char*>(tex.data()), width, height,
-                                            1, VK_FORMAT_R32_SFLOAT, m_pCopyHelper);
+                                            1, VK_FORMAT_R32_SFLOAT, m_pCopyHelper,
+                                            VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
   
-  VkMemoryRequirements memReq;
-  m_landInfoBuf = vk_utils::createBuffer(m_device, sizeof(LandscapeInfo), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &memReq);
+  {
+    VkMemoryRequirements memReq;
+    m_landInfoBuf = vk_utils::createBuffer(m_device, sizeof(LandscapeInfo), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                           &memReq);
+    VkMemoryAllocateInfo allocateInfo = {};
+    allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocateInfo.pNext = nullptr;
+    allocateInfo.allocationSize = memReq.size;
+    allocateInfo.memoryTypeIndex = vk_utils::findMemoryType(memReq.memoryTypeBits,
+                                                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                                            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                                            m_physDevice);
+    VK_CHECK_RESULT(vkAllocateMemory(m_device, &allocateInfo, nullptr, &m_landMemAlloc))
+    
+    VK_CHECK_RESULT(vkBindBufferMemory(m_device, m_landInfoBuf, m_landMemAlloc, 0));
+    
+    vkMapMemory(m_device, m_landMemAlloc, 0, sizeof(LandscapeInfo), 0, &m_landMappedMem);
+    m_land_info.height = height;
+    m_land_info.width = width;
+    m_land_info.scale = float4(width, 40.0, height, 0.0);
+    m_land_info.trans = float4(-10.0f, -10.0, -10.0, 0.0);
+    //m_land_info.trans = float3(-width / 4, -1.0, -height/4);
+    m_land_info.sun_position = float4(100.0, 90.0, 100.0, 1.0);
+    m_lightInfos.push_back({float4(1.0),
+                            LiteMath::to_float3(m_land_info.sun_position),
+                            float(0.0)});
+    memcpy(m_landMappedMem, &m_land_info, sizeof(LandscapeInfo));
+  }
   
-  VkMemoryAllocateInfo allocateInfo = {};
-  allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  allocateInfo.pNext = nullptr;
-  allocateInfo.allocationSize = memReq.size;
-  allocateInfo.memoryTypeIndex = vk_utils::findMemoryType(memReq.memoryTypeBits,
-                                                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                                          VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                                          m_physDevice);
-  VK_CHECK_RESULT(vkAllocateMemory(m_device, &allocateInfo, nullptr, &m_landMemAlloc))
   
-  VK_CHECK_RESULT(vkBindBufferMemory(m_device, m_landInfoBuf, m_landMemAlloc, 0));
+  {
+    std::vector<unsigned int> grass_tex;
+    for (int i = 0; i < 256; i++) {
+      for (int j = 0; j < 256; j++) {
+        grass_tex.push_back(BlueGenerator::get_noise(LiteMath::uint2(i, j)));
+      }
+    }
+    m_grass_map = vk_utils::allocateColorTextureFromDataLDR(m_device, m_physDevice,
+                                                            reinterpret_cast<const unsigned char*>(grass_tex.data()), 256, 256,
+                                                            1, VK_FORMAT_R8G8B8A8_UNORM, m_pCopyHelper,
+                                                            VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+    
+    VkMemoryRequirements memReq;
+    m_grassInfoBuf = vk_utils::createBuffer(m_device, sizeof(GrassInfo), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                            &memReq);
+    VkMemoryAllocateInfo allocateInfo = {};
+    allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocateInfo.pNext = nullptr;
+    allocateInfo.allocationSize = memReq.size;
+    allocateInfo.memoryTypeIndex = vk_utils::findMemoryType(memReq.memoryTypeBits,
+                                                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                                            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                                            m_physDevice);
+    VK_CHECK_RESULT(vkAllocateMemory(m_device, &allocateInfo, nullptr, &m_grassMemAlloc))
+    
+    VK_CHECK_RESULT(vkBindBufferMemory(m_device, m_grassInfoBuf, m_grassMemAlloc, 0));
+    
+    vkMapMemory(m_device, m_grassMemAlloc, 0, sizeof(GrassInfo), 0, &m_grassMappedMem);
+    m_grass_info.tile_count = uint2(32, 32);
+    m_grass_info.near_far = float2(20.0, 50.0);
+    m_grass_info.freq_min = uint2(10, 10);
+    m_grass_info.freq_max = uint2(20, 20);
+    
+    memcpy(m_grassMappedMem, &m_grass_info, sizeof(GrassInfo));
+  }
+  {
+    // single grass mesh
+    std::vector<Vertex> vertices =
+    {
+            { {  0.01f,  0.0f, 0.0f } },
+            { { -0.01f,  0.0f, 0.0f } },
+            { {  0.0f,  0.1f, 0.0f } }
+    };
   
-  vkMapMemory(m_device, m_landMemAlloc, 0, sizeof(LandscapeInfo), 0, &m_landMappedMem);
+    std::vector<uint32_t> indices = { 0, 1, 2 };
+    
+    VkDeviceSize vertexBufSize = sizeof(Vertex) * vertices.size();
+    VkDeviceSize indexBufSize  = sizeof(uint32_t) * indices.size();
+  
+    VkMemoryRequirements vertMemReq, idxMemReq;
+    m_grassVertBuf = vk_utils::createBuffer(m_device, vertexBufSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, &vertMemReq);
+    m_grassIdxBuf  = vk_utils::createBuffer(m_device, indexBufSize,  VK_BUFFER_USAGE_INDEX_BUFFER_BIT  | VK_BUFFER_USAGE_TRANSFER_DST_BIT, &idxMemReq);
+  
+    size_t pad = vk_utils::getPaddedSize(vertMemReq.size, idxMemReq.alignment);
+  
+    VkMemoryAllocateInfo allocateInfo = {};
+    allocateInfo.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocateInfo.pNext           = nullptr;
+    allocateInfo.allocationSize  = pad + idxMemReq.size;
+    allocateInfo.memoryTypeIndex = vk_utils::findMemoryType(vertMemReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_physDevice);
   
   
-  m_land_info.height = height;
-  m_land_info.width = width;
-  m_land_info.scale = float4(width, 40.0, height, 0.0);
-  m_land_info.trans = float4(-10.0f, -10.0, -10.0, 0.0);
-  //m_land_info.trans = float3(-width / 4, -1.0, -height/4);
-  m_land_info.sun_position = float4(100.0, 40.0, 100.0, 1.0);
-  m_lightInfos.push_back({float4(1.0),
-                          LiteMath::to_float3(m_land_info.sun_position),
-                          float(0.0) });
-  memcpy(m_landMappedMem, &m_land_info, sizeof(LandscapeInfo));
+    VK_CHECK_RESULT(vkAllocateMemory(m_device, &allocateInfo, nullptr, &m_grassMeshMemAlloc));
+  
+    VK_CHECK_RESULT(vkBindBufferMemory(m_device, m_grassVertBuf, m_grassMeshMemAlloc, 0));
+    VK_CHECK_RESULT(vkBindBufferMemory(m_device, m_grassIdxBuf,  m_grassMeshMemAlloc, pad));
+    m_pCopyHelper->UpdateBuffer(m_grassVertBuf, 0, vertices.data(),  vertexBufSize);
+    m_pCopyHelper->UpdateBuffer(m_grassIdxBuf,  0, indices.data(), indexBufSize);
+    
+    m_grass_inputBinding.binding   = 0;
+    m_grass_inputBinding.stride    = sizeof(Vertex);
+    m_grass_inputBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    
+    m_grass_inputAttributes.binding  = 0;
+    m_grass_inputAttributes.location = 0;
+    m_grass_inputAttributes.format   = VK_FORMAT_R32G32B32_SFLOAT;
+    m_grass_inputAttributes.offset   = 0;
+  
+    m_grass_vertexInputInfo.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    m_grass_vertexInputInfo.vertexBindingDescriptionCount   = 1;
+    m_grass_vertexInputInfo.vertexAttributeDescriptionCount = 1;
+    m_grass_vertexInputInfo.pVertexBindingDescriptions      = &m_grass_inputBinding;
+    m_grass_vertexInputInfo.pVertexAttributeDescriptions    = &m_grass_inputAttributes;
+  }
   
   if(m_lightInfoBuf != VK_NULL_HANDLE)
   {

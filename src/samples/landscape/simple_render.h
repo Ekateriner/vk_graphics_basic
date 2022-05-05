@@ -23,6 +23,12 @@ public:
   const std::string TESSELATION_CONTROL_SHADER_PATH_LAND = "../resources/shaders/landscape.tesc";
   const std::string TESSELATION_EVALUATION_SHADER_PATH_LAND = "../resources/shaders/landscape.tese";
   
+  const std::string COMPUTE_SHADER_PATH_GRASS = "../resources/shaders/grass_frustum_cul.comp";
+  const std::string VERTEX_SHADER_PATH_GRASS = "../resources/shaders/grass.vert";
+  const std::string TESSELATION_CONTROL_SHADER_PATH_GRASS = "../resources/shaders/grass.tesc";
+  const std::string TESSELATION_EVALUATION_SHADER_PATH_GRASS = "../resources/shaders/grass.tese";
+  const std::string FRAGMENT_SHADER_PATH_GRASS = "../resources/shaders/grass.frag";
+  
   const std::string VERTEX_SHADER_PATH_FILL = "../resources/shaders/g_buffer_fill.vert";
   const std::string FRAGMENT_SHADER_PATH_FILL = "../resources/shaders/g_buffer_fill.frag";
   const std::string VERTEX_SHADER_PATH_RESOLVE = "../resources/shaders/g_buffer_resolve.vert";
@@ -110,11 +116,25 @@ protected:
       LiteMath::float4x4 projView;
       uint32_t instance_count;
   } comp_pushConst;
+  
+  struct
+  {
+    LiteMath::float4x4 projView;
+  } grass_pushConst;
 
   VkBuffer iicommand_buffer;
   VkBuffer drawAtomic_buffer;
   VkBuffer drawMatrices_buffer;
   VkDeviceMemory m_buffers_memory;
+  
+  VkBuffer grass_iicommand_buffer;
+  VkBuffer grassShifts_buffer;
+  VkDeviceMemory m_grass_buffers_memory;
+  VkDescriptorSet m_grass_comp_dSet = VK_NULL_HANDLE;
+  VkDescriptorSetLayout m_grass_comp_dSetLayout = VK_NULL_HANDLE;
+  VkDescriptorSet m_grass_dSet = VK_NULL_HANDLE;
+  VkDescriptorSetLayout m_grass_dSetLayout = VK_NULL_HANDLE;
+  
   
   int m_landscape_width = 128;
   int m_landscape_height = 128;
@@ -128,6 +148,8 @@ protected:
   pipeline_data_t m_resolveForwardPipeline {};
   pipeline_data_t m_computeForwardPipeline {};
   pipeline_data_t m_landscapePipeline {};
+  pipeline_data_t m_grass_compPipeline {};
+  pipeline_data_t m_grassPipeline {};
   pipeline_data_t m_postEPipeline {};
 
   VkDescriptorSet m_fill_dSet = VK_NULL_HANDLE;

@@ -405,6 +405,26 @@ void SimpleRender::SetupSimplePipeline()
     vkDestroyPipeline(m_device, m_landscapePipeline.pipeline, nullptr);
     m_landscapePipeline.pipeline = VK_NULL_HANDLE;
   }
+  if(m_grass_compPipeline.layout != VK_NULL_HANDLE)
+  {
+    vkDestroyPipelineLayout(m_device, m_grass_compPipeline.layout, nullptr);
+    m_grass_compPipeline.layout = VK_NULL_HANDLE;
+  }
+  if(m_grass_compPipeline.pipeline != VK_NULL_HANDLE)
+  {
+    vkDestroyPipeline(m_device, m_grass_compPipeline.pipeline, nullptr);
+    m_grass_compPipeline.pipeline = VK_NULL_HANDLE;
+  }
+  if(m_grassPipeline.layout != VK_NULL_HANDLE)
+  {
+    vkDestroyPipelineLayout(m_device, m_grassPipeline.layout, nullptr);
+    m_grassPipeline.layout = VK_NULL_HANDLE;
+  }
+  if(m_grassPipeline.pipeline != VK_NULL_HANDLE)
+  {
+    vkDestroyPipeline(m_device, m_grassPipeline.pipeline, nullptr);
+    m_grassPipeline.pipeline = VK_NULL_HANDLE;
+  }
   if(m_postEPipeline.layout != VK_NULL_HANDLE)
   {
     vkDestroyPipelineLayout(m_device, m_postEPipeline.layout, nullptr);
@@ -418,9 +438,9 @@ void SimpleRender::SetupSimplePipeline()
   
   if(m_pBindings == nullptr) {
       std::vector<std::pair<VkDescriptorType, uint32_t> > dtypes = {
-              {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4},
-              {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 7},
-              {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1},
+              {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 9},
+              {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10},
+              {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
               {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 5}
       };
       m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 5);
@@ -434,6 +454,29 @@ void SimpleRender::SetupSimplePipeline()
     m_pBindings->BindBuffer(3, drawAtomic_buffer);
     m_pBindings->BindBuffer(4, drawMatrices_buffer);
     m_pBindings->BindEnd(&m_comp_dSet, &m_comp_dSetLayout);
+  }
+  
+  {
+    m_pBindings->BindBegin(VK_SHADER_STAGE_COMPUTE_BIT);
+    m_pBindings->BindBuffer(0, m_pScnMgr->GetLandInfoBuffer(), VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    m_pBindings->BindBuffer(1, m_pScnMgr->GetGrassInfoBuffer(), VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    m_pBindings->BindBuffer(2, grass_iicommand_buffer);
+    m_pBindings->BindBuffer(3, grassShifts_buffer);
+    m_pBindings->BindEnd(&m_grass_comp_dSet, &m_grass_comp_dSetLayout);
+  }
+  
+  {
+    m_pBindings->BindBegin(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT |
+                           VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    m_pBindings->BindBuffer(0, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    m_pBindings->BindBuffer(1, m_pScnMgr->GetLandInfoBuffer(), VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    m_pBindings->BindBuffer(2, m_pScnMgr->GetGrassInfoBuffer(), VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    m_pBindings->BindBuffer(3, grassShifts_buffer);
+    m_pBindings->BindImage(4, m_pScnMgr->GetHeightMap().view, m_simple_image_sampler,
+                           VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    m_pBindings->BindImage(5, m_pScnMgr->GetGrassMap().view, m_simple_image_sampler,
+                           VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    m_pBindings->BindEnd(&m_grass_dSet, &m_grass_dSetLayout);
   }
   
   {
@@ -619,6 +662,83 @@ void SimpleRender::SetupSimplePipeline()
   }
   
   {
+    vk_utils::ComputePipelineMaker comp_maker;
+    comp_maker.LoadShader(m_device, COMPUTE_SHADER_PATH_GRASS + ".spv");
+  
+    m_grass_compPipeline.layout = comp_maker.MakeLayout(m_device, {m_grass_comp_dSetLayout}, sizeof(grass_pushConst));
+    m_grass_compPipeline.pipeline = comp_maker.MakePipeline(m_device);
+  
+    
+    vk_utils::GraphicsPipelineMaker maker;
+  
+    std::unordered_map<VkShaderStageFlagBits, std::string> shader_paths;
+    shader_paths[VK_SHADER_STAGE_FRAGMENT_BIT] = FRAGMENT_SHADER_PATH_GRASS + ".spv";
+    shader_paths[VK_SHADER_STAGE_VERTEX_BIT] = VERTEX_SHADER_PATH_GRASS + ".spv";
+    shader_paths[VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT] = TESSELATION_CONTROL_SHADER_PATH_GRASS + ".spv";
+    shader_paths[VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT] = TESSELATION_EVALUATION_SHADER_PATH_GRASS + ".spv";
+    maker.LoadShaders(m_device, shader_paths);
+  
+    m_grassPipeline.layout = maker.MakeLayout(m_device, {m_grass_dSetLayout}, sizeof(resolveConst));
+    maker.SetDefaultState(m_width, m_height);
+  
+    std::array<VkPipelineColorBlendAttachmentState, m_gbuf_size - 1> blendStates{};
+    VkPipelineColorBlendAttachmentState defaultState{};
+    defaultState.blendEnable = VK_FALSE;
+    defaultState.colorWriteMask =
+            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    blendStates.fill(defaultState);
+  
+    maker.colorBlending.attachmentCount = blendStates.size();
+    maker.colorBlending.pAttachments = blendStates.data();
+  
+    std::array dynStates{VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+  
+    VkPipelineDynamicStateCreateInfo dynamicState = {};
+    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.dynamicStateCount = (uint32_t) dynStates.size();
+    dynamicState.pDynamicStates = dynStates.data();
+  
+    VkPipelineVertexInputStateCreateInfo vertexLayout = m_pScnMgr->GetGrassPipelineVertexInputStateCreateInfo();
+  
+    VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
+    inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
+    inputAssembly.primitiveRestartEnable = false;
+  
+    VkPipelineTessellationStateCreateInfo tessState = {};
+    tessState.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO;
+    tessState.patchControlPoints = 3;
+  
+    VkGraphicsPipelineCreateInfo pipelineInfo = {};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.flags = 0;
+    pipelineInfo.stageCount = static_cast<uint32_t>(shader_paths.size());
+    pipelineInfo.pStages = maker.shaderStageInfos;
+    pipelineInfo.pVertexInputState = &vertexLayout;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &maker.viewportState;
+    pipelineInfo.pRasterizationState = &maker.rasterizer;
+    pipelineInfo.pMultisampleState = &maker.multisampling;
+    pipelineInfo.pColorBlendState = &maker.colorBlending;
+    pipelineInfo.pTessellationState = &tessState;
+    pipelineInfo.layout = m_grassPipeline.layout;
+    pipelineInfo.renderPass = m_mainRenderPass;
+    pipelineInfo.subpass = 0;
+    pipelineInfo.pDynamicState = &dynamicState;
+    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+    pipelineInfo.pDepthStencilState = &maker.depthStencilTest;
+  
+    VK_CHECK_RESULT(vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
+                                              &m_grassPipeline.pipeline));
+  
+    for (size_t i = 0; i < shader_paths.size(); ++i) {
+      if (maker.shaderModules[i] != VK_NULL_HANDLE)
+        vkDestroyShaderModule(m_device, maker.shaderModules[i], VK_NULL_HANDLE);
+      maker.shaderModules[i] = VK_NULL_HANDLE;
+    }
+  }
+  
+  {
     vk_utils::GraphicsPipelineMaker maker;
   
     std::unordered_map<VkShaderStageFlagBits, std::string> shader_paths;
@@ -663,6 +783,18 @@ void SimpleRender::CreateBuffers()
                                                  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
     m_buffers_memory = vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice,
                                                             {iicommand_buffer, drawAtomic_buffer, drawMatrices_buffer},
+                                                            0);
+  }
+  
+  {
+    grass_iicommand_buffer = vk_utils::createBuffer(m_device,
+                                                    sizeof(VkDrawIndexedIndirectCommand),
+                                                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT);
+    grassShifts_buffer = vk_utils::createBuffer(m_device,
+                                                m_pScnMgr->GrassTilesNum() * m_pScnMgr->GrassMaxCount() * sizeof(LiteMath::uint2),
+                                                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+    m_grass_buffers_memory = vk_utils::allocateAndBindWithPadding(m_device, m_physicalDevice,
+                                                            {grass_iicommand_buffer, grassShifts_buffer},
                                                             0);
   }
 
@@ -755,6 +887,37 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
                          VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
                          {}, 0, nullptr, barriers.size(), barriers.data(), 0, nullptr);
   }
+  
+  {
+    vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, m_grass_compPipeline.pipeline);
+    vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, m_grass_compPipeline.layout, 0, 1,
+                            &m_grass_comp_dSet, 0, VK_NULL_HANDLE);
+    vkCmdPushConstants(a_cmdBuff, m_grass_compPipeline.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                       sizeof(grass_pushConst), &grass_pushConst);
+    vkCmdDispatch(a_cmdBuff, 1, 1, 1);
+  
+    VkBufferMemoryBarrier barrier_command = {};
+    barrier_command.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    barrier_command.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    barrier_command.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT;
+    barrier_command.buffer = grass_iicommand_buffer;
+    barrier_command.offset = 0;
+    barrier_command.size = VK_WHOLE_SIZE;
+  
+    VkBufferMemoryBarrier barrier_shift = {};
+    barrier_shift.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    barrier_shift.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    barrier_shift.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    barrier_shift.buffer = grassShifts_buffer;
+    barrier_shift.offset = 0;
+    barrier_shift.size = VK_WHOLE_SIZE;
+  
+    std::array barriers = {barrier_command, barrier_shift};
+  
+    vkCmdPipelineBarrier(a_cmdBuff, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+                         {}, 0, nullptr, barriers.size(), barriers.data(), 0, nullptr);
+  }
 
   vk_utils::setDefaultViewport(a_cmdBuff, static_cast<float>(m_width), static_cast<float>(m_height));
   vk_utils::setDefaultScissor(a_cmdBuff, m_width, m_height);
@@ -813,6 +976,27 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
                                m_pScnMgr->MeshesNum(),
                                sizeof(VkDrawIndexedIndirectCommand));
     }
+  
+    vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_grassPipeline.pipeline);
+    vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_grassPipeline.layout, 0, 1,
+                            &m_grass_dSet, 0, VK_NULL_HANDLE);
+  
+    stageFlags = (VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT |
+                  VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |VK_SHADER_STAGE_FRAGMENT_BIT);
+    
+    VkDeviceSize zero_offset = 0u;
+    VkBuffer vertexBuf = m_pScnMgr->GetGrassVertexBuffer();
+    VkBuffer indexBuf = m_pScnMgr->GetGrassIndexBuffer();
+  
+    vkCmdBindVertexBuffers(a_cmdBuff, 0, 1, &vertexBuf, &zero_offset);
+    vkCmdBindIndexBuffer(a_cmdBuff, indexBuf, 0, VK_INDEX_TYPE_UINT32);
+  
+    vkCmdPushConstants(a_cmdBuff, m_grassPipeline.layout, stageFlags, 0,
+                       sizeof(resolveConst), &resolveConst);
+  
+    vkCmdDrawIndexedIndirect(a_cmdBuff, grass_iicommand_buffer, 0, 1,
+                             sizeof(VkDrawIndexedIndirectCommand));
+    
     vkCmdNextSubpass(a_cmdBuff, VK_SUBPASS_CONTENTS_INLINE);
 
     vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_resolveForwardPipeline.pipeline);
@@ -882,11 +1066,18 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
 
 void SimpleRender::CleanupPipelineAndSwapchain()
 {
-  vkDestroyBuffer(m_device, iicommand_buffer, nullptr);
-  vkDestroyBuffer(m_device, drawAtomic_buffer, nullptr);
-  vkDestroyBuffer(m_device, drawMatrices_buffer, nullptr);
-
-  vkFreeMemory(m_device, m_buffers_memory, nullptr);
+  if (m_pScnMgr->InstancesNum() > 0) {
+    vkDestroyBuffer(m_device, iicommand_buffer, nullptr);
+    vkDestroyBuffer(m_device, drawAtomic_buffer, nullptr);
+    vkDestroyBuffer(m_device, drawMatrices_buffer, nullptr);
+  
+    vkFreeMemory(m_device, m_buffers_memory, nullptr);
+  }
+  
+  vkDestroyBuffer(m_device, grass_iicommand_buffer, nullptr);
+  vkDestroyBuffer(m_device, grassShifts_buffer, nullptr);
+  
+  vkFreeMemory(m_device, m_grass_buffers_memory, nullptr);
 
   if (!m_cmdBuffersDrawMain.empty())
   {
@@ -1077,7 +1268,26 @@ void SimpleRender::Cleanup()
     vkDestroyPipeline(m_device, m_landscapePipeline.pipeline, nullptr);
     m_landscapePipeline.pipeline = VK_NULL_HANDLE;
   }
-  
+  if(m_grass_compPipeline.layout != VK_NULL_HANDLE)
+  {
+    vkDestroyPipelineLayout(m_device, m_grass_compPipeline.layout, nullptr);
+    m_grass_compPipeline.layout = VK_NULL_HANDLE;
+  }
+  if(m_grass_compPipeline.pipeline != VK_NULL_HANDLE)
+  {
+    vkDestroyPipeline(m_device, m_grass_compPipeline.pipeline, nullptr);
+    m_grass_compPipeline.pipeline = VK_NULL_HANDLE;
+  }
+  if(m_grassPipeline.layout != VK_NULL_HANDLE)
+  {
+    vkDestroyPipelineLayout(m_device, m_grassPipeline.layout, nullptr);
+    m_grassPipeline.layout = VK_NULL_HANDLE;
+  }
+  if(m_grassPipeline.pipeline != VK_NULL_HANDLE)
+  {
+    vkDestroyPipeline(m_device, m_grassPipeline.pipeline, nullptr);
+    m_grassPipeline.pipeline = VK_NULL_HANDLE;
+  }
   if(m_postEPipeline.layout != VK_NULL_HANDLE)
   {
     vkDestroyPipelineLayout(m_device, m_postEPipeline.layout, nullptr);
@@ -1184,6 +1394,7 @@ void SimpleRender::UpdateView()
   auto mLookAt         = LiteMath::lookAt(m_cam.pos, m_cam.lookAt, m_cam.up);
   auto mWorldViewProj  = mProjFix * mProj * mLookAt;
   comp_pushConst.projView = mWorldViewProj;
+  grass_pushConst.projView = mWorldViewProj;
   resolveConst.Proj = mProjFix * mProj;
   resolveConst.View = mLookAt;
 }
