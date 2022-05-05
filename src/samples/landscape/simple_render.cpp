@@ -443,7 +443,7 @@ void SimpleRender::SetupSimplePipeline()
               {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
               {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 5}
       };
-      m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 5);
+      m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 7);
   }
   
   if (m_pScnMgr->InstancesNum() > 0) {

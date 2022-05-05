@@ -59,7 +59,8 @@ void main(void)
 {
     //vec2 s = textureLod(grassMap, mod(shift.xy, 1.0f / tile_count) * tile_count, 0).xz;
     vec2 shift = shifts_buf[gl_InstanceIndex];
-    vec2 s = textureLod(grassMap, mod(shift.xy, 1.0f / tile_count) * tile_count, 0).xy - 0.5;
+    vec2 coord = mod(shift.xy, 1.0f / tile_count) * tile_count * 1.0 / 2.0;
+    vec2 s = vec2(textureLod(grassMap, coord, 0).x, textureLod(grassMap, coord + 1.0 / 2.0, 0).x);
     vOut.texCoord = shift + s / scale.xz;
 
     mat4 mModel = params.mView * mat4(scale.x, 0, 0, 0,

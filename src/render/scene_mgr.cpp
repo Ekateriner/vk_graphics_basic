@@ -35,9 +35,9 @@ SceneManager::SceneManager(VkDevice a_device, VkPhysicalDevice a_physDevice,
 
 
 
-  m_lightInfos.push_back({float4(1.0, 0.7, 0.4, 0.3),
-                          float3(50.0, 50.0, 50.0),
-                          float(100.0) });
+//  m_lightInfos.push_back({float4(1.0, 0.7, 0.4, 0.3),
+//                          float3(50.0, 50.0, 50.0),
+//                          float(100.0) });
 
   for (uint32_t i = 0; i < lightGridSize; i++)
     for (uint32_t j = 0; j < lightGridSize; j++)
@@ -442,7 +442,7 @@ void SceneManager::GenerateLandscapeTex(int width, int height) {
     vkMapMemory(m_device, m_landMemAlloc, 0, sizeof(LandscapeInfo), 0, &m_landMappedMem);
     m_land_info.height = height;
     m_land_info.width = width;
-    m_land_info.scale = float4(width, 40.0, height, 0.0);
+    m_land_info.scale = float4(width, 20.0, height, 0.0);
     m_land_info.trans = float4(-10.0f, -10.0, -10.0, 0.0);
     //m_land_info.trans = float3(-width / 4, -1.0, -height/4);
     m_land_info.sun_position = float4(100.0, 90.0, 100.0, 1.0);
@@ -482,9 +482,10 @@ void SceneManager::GenerateLandscapeTex(int width, int height) {
     
     vkMapMemory(m_device, m_grassMemAlloc, 0, sizeof(GrassInfo), 0, &m_grassMappedMem);
     m_grass_info.tile_count = uint2(32, 32);
-    m_grass_info.near_far = float2(20.0, 50.0);
-    m_grass_info.freq_min = uint2(10, 10);
-    m_grass_info.freq_max = uint2(20, 20);
+    m_grass_info.near_far = float2(40.0, 80.0);
+    m_grass_info.freq_min = uint2(5, 5);
+    m_grass_info.freq_max = uint2(25, 25);
+    //m_grass_info.coef = float2(0.34, 0.21);
     
     memcpy(m_grassMappedMem, &m_grass_info, sizeof(GrassInfo));
   }

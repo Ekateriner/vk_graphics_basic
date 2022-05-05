@@ -43,7 +43,6 @@ layout(std430, binding = 3) buffer to_draw
 };
 
 const uint size = 10000; // it hurts, it's sad
-shared uint buf_size;
 shared uint local_instanceCount;
 shared uint grass_inst_idx;
 
@@ -56,7 +55,6 @@ void main() {
                           vec4(0.0, 1.0, 0.0, 1.0f),
                           vec4(0.0, 0.0, 1.0/tile_count.y, 1.0f),
                           vec4(0.0, 0.0, 0.0, 1.0f)};
-    buf_size = 0;
     grass_inst_idx = 0;
 
     barrier();
@@ -98,7 +96,7 @@ void main() {
 
             if (!left && !right && !up && !down && !behind && !forward) {
                 vec4 instance_pos = PushConstant.mProjView * mModel * (shift + vec4(0.5/tile_count.x, mean_height, 0.5/tile_count.y, 0));
-                float depth = abs(instance_pos.z / instance_pos.w);
+                float depth = abs(instance_pos.z);
 
                 uvec2 freq;
                 if (depth <= nearfar.x) {
