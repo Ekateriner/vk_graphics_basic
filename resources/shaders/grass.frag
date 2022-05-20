@@ -8,7 +8,7 @@ layout(location = 0) out vec4 out_normalColor;
 layout(location = 1) out vec4 out_albedoColor;
 layout(location = 2) out vec4 out_tangentColor;
 
-layout (location = 0 ) in VS_OUT
+layout (location = 0 ) in TES_OUT
 {
     vec3 Norm;
     vec3 Tangent;

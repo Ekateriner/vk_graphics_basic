@@ -100,18 +100,19 @@ void main() {
 
                 uvec2 freq;
                 if (depth <= nearfar.x) {
-                    atomicAdd(local_instanceCount, freq_max.x * freq_max.y);
                     freq = freq_max;
+
                 }
                 else if (depth <= nearfar.y) {
-                    vec2 new_freq = (nearfar.y - depth) / (nearfar.y - nearfar.x) * (freq_max - freq_min) + freq_min;
-                    atomicAdd(local_instanceCount, int(floor(new_freq.x) * floor(new_freq.y)));
-                    freq = uvec2(new_freq);
+                    freq = uvec2((nearfar.y - depth) / (nearfar.y - nearfar.x) * (freq_max - freq_min) + freq_min);
                 }
                 else {
-                    atomicAdd(local_instanceCount, freq_min.x * freq_min.y);
                     freq = freq_min;
                 }
+
+                freq = uvec2(pow(vec2(2.0, 2.0), freq * 1.0));
+
+                atomicAdd(local_instanceCount, freq.x * freq.y);
 
                 for (uint grass_i = 0; grass_i < freq.x; grass_i++) {
                     for (uint grass_j = 0; grass_j < freq.y; grass_j++) {

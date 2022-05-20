@@ -39,23 +39,22 @@ layout(binding = 1, set = 0) uniform land_info
 layout (binding = 2) uniform sampler2D heightMap;
 
 float eps = 0.01f;
-int hits = 35;
+uint hits = 35;
 
 void main()
 {
-    mat4 mModel = mat4(scale.x, 0, 0, 0,
-                       0, scale.y, 0, 0,
-                       0, 0, scale.z, 0,
-                       trans.x, trans.y, trans.z, 1.0);
+    mat4 mModel = mat4(scale.x, 0.0f, 0.0f, 0.0f,
+                       0.0f, scale.y, 0.0f, 0.0f,
+                       0.0f, 0.0f, scale.z, 0.0f,
+                       trans.x, trans.y, trans.z, 1.0f);
 
     out_normalColor = vec4(surf.Norm, 1.0f);
-    out_albedoColor = vec4(Params.baseColor, 1.0f);
     out_tangentColor = vec4(surf.Tangent, 1.0f);
 
     vec3 SunPos = (inverse(mModel) * sun_pos).xyz; //tex_space
     vec3 step = normalize(SunPos - surf.Pos) * eps; //tex space
     vec3 cur =  surf.Pos + step;
-    int shadow = 0;
+    uint shadow = 0;
     while (length(cur - surf.Pos) < length(SunPos - surf.Pos)) {
         if (cur.y < textureLod(heightMap, cur.xz, 0).x) {
             shadow += 1;
@@ -65,5 +64,5 @@ void main()
         }
         cur += step;
     }
-    out_albedoColor = vec4(Params.baseColor, float(hits - shadow) / hits);
+    out_albedoColor = vec4(Params.baseColor, float(hits - shadow) / float(hits));
 }

@@ -9,7 +9,7 @@ if __name__ == '__main__':
                    "g_buffer_resolve.vert", "g_buffer_resolve.geom", "g_buffer_resolve.frag",
                    "landscape.vert", "landscape.frag", "landscape.tese", "landscape.tesc",
                    "quad3_vert.vert", "post_effects.frag", "grass_frustum_cul.comp",
-                   "grass.vert", "grass.tesc", "grass.tese", "grass.frag"]
+                   "grass.vert", "grass.tesc", "grass.tese", "grass.frag", "fog.frag"]
 
     for shader in shader_list:
         subprocess.run([glslang_cmd, "-V", shader, "-o", "{}.spv".format(shader)])

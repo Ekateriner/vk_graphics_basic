@@ -53,23 +53,27 @@ layout (location = 0 ) out TES_OUT
     vec3 Tangent;
 } teOut;
 
-vec3 wind_dir = vec3(0.0, 0.0, 5.0);
+vec3 wind_dir = vec3(2.0f, 0.0f, 2.0f);
 
 void main() {
-    mat4 mModel = params.mView * mat4(scale.x, 0, 0, 0,
-                                      0, scale.y, 0, 0,
-                                      0, 0, scale.z, 0,
-                                      trans.x, trans.y, trans.z, 1.0);
+    mat4 mModel = mat4(scale.x, 0.0f, 0.0f, 0.0f,
+                       0.0f, scale.y, 0.0f, 0.0f,
+                       0.0f, 0.0f, scale.z, 0.0f,
+                       trans.x, trans.y, trans.z, 1.0f);
 
-    vec3 cPos = (gl_TessCoord.x * tcOut[0].Pos +
+    vec3 tPos = (gl_TessCoord.x * tcOut[0].Pos +
                  gl_TessCoord.y * tcOut[1].Pos +
                  gl_TessCoord.z * tcOut[2].Pos);
 
-    float height_pos = cPos.y - (mModel * vec4(tcOut[0].texCoord.x, textureLod(heightMap, tcOut[0].texCoord.xy, 0).x, tcOut[0].texCoord.y, 1.0f)).y;
+    vec2 texCoord = (gl_TessCoord.x * tcOut[0].texCoord +
+                     gl_TessCoord.y * tcOut[1].texCoord +
+                     gl_TessCoord.z * tcOut[2].texCoord);
+
+    float height_pos = scale.y * (tPos.y - textureLod(heightMap, texCoord.xy, 0).x);
 
     teOut.Norm = tcOut[0].Norm;
     teOut.Tangent = tcOut[0].Tangent;
-    cPos += pow(height_pos, 2) * wind_dir * sin(Params.time);
+    tPos += pow(height_pos, 2) * wind_dir * abs(sin(Params.time * 0.5f)) / scale.xyz;
 
-    gl_Position = params.mProj * vec4(cPos, 1.0f);
+    gl_Position = params.mProj * params.mView * mModel * vec4(tPos, 1.0f);
 }

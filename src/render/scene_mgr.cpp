@@ -95,7 +95,7 @@ hydra_xml::Camera SceneManager::GetCamera(uint32_t camId) const
     res.fov = 60;
     res.nearPlane = 0.1f;
     res.farPlane  = 1000.0f;
-    res.pos[0] = 0.0f; res.pos[1] = 0.0f; res.pos[2] = 15.0f;
+    res.pos[0] = 0.0f; res.pos[1] = 20.0f; res.pos[2] = 0.0f;
     res.up[0] = 0.0f; res.up[1] = 1.0f; res.up[2] = 0.0f;
     res.lookAt[0] = 0.0f; res.lookAt[1] = 0.0f; res.lookAt[2] = 0.0f;
 
@@ -412,10 +412,10 @@ void SceneManager::GenerateLandscapeTex(int width, int height) {
   float scale = 3.0;
   for (int i = 0; i < height; i++) {
     for (int j = 0; j < width; j++) {
-      LiteMath::float2 st = LiteMath::float2(float(i)/width, float(j) / height);
-      st.x *= float(width)/height;
+      LiteMath::float2 st = LiteMath::float2(float(i)/float(width), float(j) / float(height));
+      st.x *= float(width)/float(height);
       
-      tex.push_back(BrownGenerator::fbm( st * scale));
+      tex.push_back(0.1f + 0.9f * BrownGenerator::fbm( st * scale));
     }
   }
   m_height_map = vk_utils::allocateColorTextureFromDataLDR(m_device, m_physDevice,
@@ -442,8 +442,8 @@ void SceneManager::GenerateLandscapeTex(int width, int height) {
     vkMapMemory(m_device, m_landMemAlloc, 0, sizeof(LandscapeInfo), 0, &m_landMappedMem);
     m_land_info.height = height;
     m_land_info.width = width;
-    m_land_info.scale = float4(width, 20.0, height, 0.0);
-    m_land_info.trans = float4(-10.0f, -10.0, -10.0, 0.0);
+    m_land_info.scale = float4(float(width)/2.0, 15.0, float(height)/2.0, 0.0f);
+    m_land_info.trans = float4(0.0f, -5.0f, -10.0f, 0.0f);
     //m_land_info.trans = float3(-width / 4, -1.0, -height/4);
     m_land_info.sun_position = float4(100.0, 90.0, 100.0, 1.0);
     m_lightInfos.push_back({float4(1.0),
@@ -482,9 +482,9 @@ void SceneManager::GenerateLandscapeTex(int width, int height) {
     
     vkMapMemory(m_device, m_grassMemAlloc, 0, sizeof(GrassInfo), 0, &m_grassMappedMem);
     m_grass_info.tile_count = uint2(32, 32);
-    m_grass_info.near_far = float2(10.0, 30.0);
-    m_grass_info.freq_min = uint2(0, 0);
-    m_grass_info.freq_max = uint2(15, 15);
+    m_grass_info.near_far = float2(10.0, 20.0);
+    m_grass_info.freq_min = uint2(1, 1);
+    m_grass_info.freq_max = uint2(4, 4);
     //m_grass_info.coef = float2(0.34, 0.21);
     
     memcpy(m_grassMappedMem, &m_grass_info, sizeof(GrassInfo));

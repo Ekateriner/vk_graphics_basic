@@ -95,9 +95,10 @@ void SimpleRender::InitPresentation(VkSurfaceKHR &a_surface, bool initGUI)
   m_albedoBuffer.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   m_tangentBuffer.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   m_resultImageBuffer.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  m_fogImageBuffer.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   vk_utils::createImgAllocAndBind(m_device, m_physicalDevice, m_width, m_height,
                                   m_depthBuffer.format,
-                                  VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &m_depthBuffer);
+                                  VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &m_depthBuffer);
   vk_utils::createImgAllocAndBind(m_device, m_physicalDevice, m_width, m_height,
                                   VK_FORMAT_R16G16B16A16_SFLOAT,
                                   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &m_normalBuffer);
@@ -107,6 +108,9 @@ void SimpleRender::InitPresentation(VkSurfaceKHR &a_surface, bool initGUI)
   vk_utils::createImgAllocAndBind(m_device, m_physicalDevice, m_width, m_height,
                                   VK_FORMAT_R16G16B16A16_SFLOAT,
                                   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &m_tangentBuffer);
+  vk_utils::createImgAllocAndBind(m_device, m_physicalDevice, m_width/fog_scale_factor, m_height/fog_scale_factor,
+                                  VK_FORMAT_R16G16B16A16_SFLOAT,
+                                  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &m_fogImageBuffer);
   vk_utils::createImgAllocAndBind(m_device, m_physicalDevice, m_width, m_height,
                                   VK_FORMAT_R16G16B16A16_SFLOAT,
                                   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &m_resultImageBuffer);
@@ -143,7 +147,7 @@ void SimpleRender::CreateRenderpass() {
                     .format = m_depthBuffer.format,
                     .samples = VK_SAMPLE_COUNT_1_BIT,
                     .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                    .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
                     .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                     .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
                     .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -155,7 +159,7 @@ void SimpleRender::CreateRenderpass() {
                       .format = format,
                       .samples = VK_SAMPLE_COUNT_1_BIT,
                       .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                      .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                      .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
                       .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                       .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
                       .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -227,6 +231,61 @@ void SimpleRender::CreateRenderpass() {
     renderPassInfo.pDependencies = dependencies.data();
     
     VK_CHECK_RESULT(vkCreateRenderPass(m_device, &renderPassInfo, nullptr, &m_mainRenderPass));
+  }
+  
+  // fog renderpass
+  {
+    std::vector<VkAttachmentDescription> attachmentDescriptions;
+    attachmentDescriptions.push_back(
+            VkAttachmentDescription{
+                    .flags = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT,
+                    .format = m_fogImageBuffer.format,
+                    .samples = VK_SAMPLE_COUNT_1_BIT,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+                    .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                    .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+
+    std::array<VkSubpassDescription, 1> subpasses{};
+
+    std::vector<VkAttachmentReference> colorAttachmentRefs;
+    colorAttachmentRefs.push_back(VkAttachmentReference{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL});
+
+    subpasses[0].pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpasses[0].colorAttachmentCount = colorAttachmentRefs.size();
+    subpasses[0].pColorAttachments = colorAttachmentRefs.data();
+
+    std::array<VkSubpassDependency, 1> dependencies{};
+
+    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[0].dstSubpass = 0;
+    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[0].srcAccessMask = {};
+    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+//    dependencies[1].srcSubpass = 0;
+//    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+//    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+//    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+//    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+//    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+//    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    VkRenderPassCreateInfo renderPassInfo = {};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = attachmentDescriptions.size();
+    renderPassInfo.pAttachments = attachmentDescriptions.data();
+    renderPassInfo.subpassCount = subpasses.size();
+    renderPassInfo.pSubpasses = subpasses.data();
+    renderPassInfo.dependencyCount = dependencies.size();
+    renderPassInfo.pDependencies = dependencies.data();
+
+    VK_CHECK_RESULT(vkCreateRenderPass(m_device, &renderPassInfo, nullptr, &m_fogRenderPass));
+
   }
   
   // post render pass
@@ -305,6 +364,23 @@ void SimpleRender::CreateFrameBuffer()
     attachments[3] = m_albedoBuffer.view;
     attachments[4] = m_tangentBuffer.view;
     vkCreateFramebuffer(m_device, &framebufferInfo, nullptr, &m_mainFrameBuffer);
+  }
+  
+  // fog
+  {
+    std::array<VkImageView, 1> attachments{};
+
+    VkFramebufferCreateInfo framebufferInfo = {};
+    framebufferInfo.sType                   = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebufferInfo.renderPass              = m_fogRenderPass;
+    framebufferInfo.attachmentCount         = attachments.size();
+    framebufferInfo.pAttachments            = attachments.data();
+    framebufferInfo.width                   = m_swapchain.GetExtent().width / fog_scale_factor;
+    framebufferInfo.height                  = m_swapchain.GetExtent().height / fog_scale_factor;
+    framebufferInfo.layers                  = 1;
+
+    attachments[0] = m_fogImageBuffer.view;
+    vkCreateFramebuffer(m_device, &framebufferInfo, nullptr, &m_fogFrameBuffer);
   }
   
   // post to screen
@@ -425,6 +501,16 @@ void SimpleRender::SetupSimplePipeline()
     vkDestroyPipeline(m_device, m_grassPipeline.pipeline, nullptr);
     m_grassPipeline.pipeline = VK_NULL_HANDLE;
   }
+  if(m_fogPipeline.layout != VK_NULL_HANDLE)
+  {
+    vkDestroyPipelineLayout(m_device, m_fogPipeline.layout, nullptr);
+    m_fogPipeline.layout = VK_NULL_HANDLE;
+  }
+  if(m_fogPipeline.pipeline != VK_NULL_HANDLE)
+  {
+    vkDestroyPipeline(m_device, m_fogPipeline.pipeline, nullptr);
+    m_fogPipeline.pipeline = VK_NULL_HANDLE;
+  }
   if(m_postEPipeline.layout != VK_NULL_HANDLE)
   {
     vkDestroyPipelineLayout(m_device, m_postEPipeline.layout, nullptr);
@@ -438,9 +524,9 @@ void SimpleRender::SetupSimplePipeline()
   
   if(m_pBindings == nullptr) {
       std::vector<std::pair<VkDescriptorType, uint32_t> > dtypes = {
-              {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 9},
+              {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 11},
               {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10},
-              {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
+              {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 6},
               {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 5}
       };
       m_pBindings = std::make_shared<vk_utils::DescriptorMaker>(m_device, dtypes, 7);
@@ -506,6 +592,16 @@ void SimpleRender::SetupSimplePipeline()
   }
   
   {
+    m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT);
+    m_pBindings->BindBuffer(0, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    m_pBindings->BindImage(1, m_depthBuffer.view, m_simple_image_sampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    m_pBindings->BindBuffer(2, m_pScnMgr->GetLandInfoBuffer(), VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    m_pBindings->BindImage(3, m_pScnMgr->GetHeightMap().view, m_simple_image_sampler,
+                           VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    m_pBindings->BindEnd(&m_fog_dSet, &m_fog_dSetLayout);
+  }
+  
+  {
     m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_GEOMETRY_BIT);
     m_pBindings->BindBuffer(0, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     m_pBindings->BindBuffer(1, m_pScnMgr->GetLightInfoBuffer());
@@ -514,8 +610,9 @@ void SimpleRender::SetupSimplePipeline()
   
   {
     m_pBindings->BindBegin(VK_SHADER_STAGE_FRAGMENT_BIT);
-    //m_pBindings->BindBuffer(0, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-    m_pBindings->BindImage(0, m_resultImageBuffer.view, m_simple_image_sampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    m_pBindings->BindBuffer(0, m_ubo, VK_NULL_HANDLE, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    m_pBindings->BindImage(1, m_resultImageBuffer.view, m_simple_image_sampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    m_pBindings->BindImage(2, m_fogImageBuffer.view, m_simple_image_sampler, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     m_pBindings->BindEnd(&m_postE_dSet, &m_postE_dSetLayout);
   }
   
@@ -740,6 +837,29 @@ void SimpleRender::SetupSimplePipeline()
   
   {
     vk_utils::GraphicsPipelineMaker maker;
+
+    std::unordered_map<VkShaderStageFlagBits, std::string> shader_paths;
+    shader_paths[VK_SHADER_STAGE_FRAGMENT_BIT] = FRAGMENT_SHADER_PATH_FOG + ".spv";
+    shader_paths[VK_SHADER_STAGE_VERTEX_BIT] = VERTEX_SHADER_PATH_FOG + ".spv";
+    maker.LoadShaders(m_device, shader_paths);
+
+    m_fogPipeline.layout = maker.MakeLayout(m_device, {m_fog_dSetLayout},
+                                                       sizeof(resolveConst));
+    maker.SetDefaultState(m_width/fog_scale_factor, m_height/fog_scale_factor);
+    maker.depthStencilTest.depthTestEnable = false;
+
+    VkPipelineVertexInputStateCreateInfo vertexLayout = {};
+    vertexLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexLayout.vertexBindingDescriptionCount = 0;
+    vertexLayout.vertexAttributeDescriptionCount = 0;
+
+    m_fogPipeline.pipeline = maker.MakePipeline(m_device, vertexLayout,
+                                                           m_fogRenderPass,
+                                                           {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR});
+  }
+  
+  {
+    vk_utils::GraphicsPipelineMaker maker;
   
     std::unordered_map<VkShaderStageFlagBits, std::string> shader_paths;
     shader_paths[VK_SHADER_STAGE_FRAGMENT_BIT] = FRAGMENT_SHADER_PATH_POSTE + ".spv";
@@ -816,10 +936,9 @@ void SimpleRender::CreateBuffers()
   vkMapMemory(m_device, m_uboAlloc, 0, sizeof(m_uniforms), 0, &m_uboMappedMem);
 
   //m_uniforms.lightPos = LiteMath::float3(0.0f, 1.0f, 1.0f);
-  m_uniforms.baseColor = LiteMath::float3(0.9f, 0.92f, 1.0f);
-  m_uniforms.baseColor = LiteMath::float3(0.9f, 0.92f, 1.0f);
+  m_uniforms.baseColor = LiteMath::float3(0.56f, 0.53f, 0.5f);
   m_uniforms.animateLightColor = true;
-
+  m_uniforms.fog_scale = fog_scale_factor;
   UpdateUniformBuffer(0.0f);
 }
 
@@ -1015,22 +1134,86 @@ void SimpleRender::BuildCommandBufferSimple(VkCommandBuffer a_cmdBuff, VkFramebu
     vkCmdEndRenderPass(a_cmdBuff);
   }
   
-  VkImageMemoryBarrier image_barrier = {};
-  image_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  image_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-  image_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-  image_barrier.image = m_resultImageBuffer.image;
-  image_barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-  image_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-  image_barrier.subresourceRange = VkImageSubresourceRange({.aspectMask = m_resultImageBuffer.aspectMask,
-                                                            .baseMipLevel = 0,
-                                                            .levelCount = m_resultImageBuffer.mipLvls,
-                                                            .baseArrayLayer = 0,
-                                                            .layerCount = 1});
+  {
+    VkImageMemoryBarrier image_barrier = {};
+    image_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    image_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    image_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    image_barrier.image = m_resultImageBuffer.image;
+    image_barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    image_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    image_barrier.subresourceRange = VkImageSubresourceRange({.aspectMask = m_resultImageBuffer.aspectMask,
+                                                                     .baseMipLevel = 0,
+                                                                     .levelCount = m_resultImageBuffer.mipLvls,
+                                                                     .baseArrayLayer = 0,
+                                                                     .layerCount = 1});
+    VkImageMemoryBarrier depth_barrier = {};
+    depth_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    depth_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    depth_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    depth_barrier.image = m_depthBuffer.image;
+    depth_barrier.oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    depth_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    depth_barrier.subresourceRange = VkImageSubresourceRange({.aspectMask = m_depthBuffer.aspectMask,
+                                                                     .baseMipLevel = 0,
+                                                                     .levelCount = m_depthBuffer.mipLvls,
+                                                                     .baseArrayLayer = 0,
+                                                                     .layerCount = 1});
+    
+    std::array barriers = {image_barrier, depth_barrier};
+    vkCmdPipelineBarrier(a_cmdBuff, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                         {}, 0, nullptr, 0, nullptr, barriers.size(), barriers.data());
+  }
   
-  vkCmdPipelineBarrier(a_cmdBuff, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                       {}, 0, nullptr, 0, nullptr, 1, &image_barrier);
+  ///// fog
+  {
+    VkRenderPassBeginInfo renderPassInfo = {};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = m_fogRenderPass;
+    renderPassInfo.framebuffer = m_fogFrameBuffer;
+    renderPassInfo.renderArea.offset = {0, 0};
+    renderPassInfo.renderArea.extent = {m_width/fog_scale_factor, m_height/fog_scale_factor};
+
+    std::array clearValues {
+            VkClearValue { .color = {{0.0f, 0.0f, 0.0f, 1.0f}} },
+    };
+    renderPassInfo.clearValueCount = clearValues.size();
+    renderPassInfo.pClearValues = clearValues.data();
+
+    vkCmdBeginRenderPass(a_cmdBuff, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_fogPipeline.pipeline);
+    vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_GRAPHICS, m_fogPipeline.layout, 0, 1,
+                            &m_fog_dSet, 0, VK_NULL_HANDLE);
+
+    VkShaderStageFlags stageFlags = (VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    vkCmdPushConstants(a_cmdBuff, m_fogPipeline.layout, stageFlags, 0, sizeof(resolveConst), &resolveConst);
+
+    vkCmdDraw(a_cmdBuff, 4, 1, 0, 0);
+
+    vkCmdEndRenderPass(a_cmdBuff);
+  }
   
+  {
+    VkImageMemoryBarrier image_fog_barrier = {};
+    image_fog_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    image_fog_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    image_fog_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    image_fog_barrier.image = m_fogImageBuffer.image;
+    image_fog_barrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    image_fog_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    image_fog_barrier.subresourceRange = VkImageSubresourceRange({.aspectMask = m_fogImageBuffer.aspectMask,
+                                                                         .baseMipLevel = 0,
+                                                                         .levelCount = m_fogImageBuffer.mipLvls,
+                                                                         .baseArrayLayer = 0,
+                                                                         .layerCount = 1});
+    
+    vkCmdPipelineBarrier(a_cmdBuff, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                         {}, 0, nullptr, 0, nullptr, 1, &image_fog_barrier);
+  }
+
   //// draw post effects pass
   {
     VkRenderPassBeginInfo renderPassInfo = {};
@@ -1126,7 +1309,14 @@ void SimpleRender::CleanupPipelineAndSwapchain()
     vkFreeMemory(m_device, m_resultImageBuffer.mem, nullptr);
     m_resultImageBuffer.mem = VK_NULL_HANDLE;
   }
-
+  
+  vk_utils::deleteImg(m_device, &m_fogImageBuffer);
+  if(m_fogImageBuffer.mem != VK_NULL_HANDLE)
+  {
+    vkFreeMemory(m_device, m_fogImageBuffer.mem, nullptr);
+    m_fogImageBuffer.mem = VK_NULL_HANDLE;
+  }
+  
   for (size_t i = 0; i < m_screenFrameBuffers.size(); i++)
   {
     vkDestroyFramebuffer(m_device, m_screenFrameBuffers[i], nullptr);
@@ -1134,11 +1324,17 @@ void SimpleRender::CleanupPipelineAndSwapchain()
   m_screenFrameBuffers.clear();
   
   vkDestroyFramebuffer(m_device, m_mainFrameBuffer, nullptr);
+  vkDestroyFramebuffer(m_device, m_fogFrameBuffer, nullptr);
   
   if(m_mainRenderPass != VK_NULL_HANDLE)
   {
     vkDestroyRenderPass(m_device, m_mainRenderPass, nullptr);
     m_mainRenderPass = VK_NULL_HANDLE;
+  }
+  if(m_fogRenderPass != VK_NULL_HANDLE)
+  {
+    vkDestroyRenderPass(m_device, m_fogRenderPass, nullptr);
+    m_fogRenderPass = VK_NULL_HANDLE;
   }
   
   if(m_postRenderPass != VK_NULL_HANDLE)
@@ -1172,9 +1368,10 @@ void SimpleRender::RecreateSwapChain()
   m_albedoBuffer.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   m_tangentBuffer.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   m_resultImageBuffer.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  m_fogImageBuffer.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   vk_utils::createImgAllocAndBind(m_device, m_physicalDevice, m_width, m_height,
                                   m_depthBuffer.format,
-                                  VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &m_depthBuffer);
+                                  VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &m_depthBuffer);
   vk_utils::createImgAllocAndBind(m_device, m_physicalDevice, m_width, m_height,
                                   VK_FORMAT_R16G16B16A16_SFLOAT,
                                   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &m_normalBuffer);
@@ -1184,6 +1381,9 @@ void SimpleRender::RecreateSwapChain()
   vk_utils::createImgAllocAndBind(m_device, m_physicalDevice, m_width, m_height,
                                   VK_FORMAT_R16G16B16A16_SFLOAT,
                                   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT, &m_tangentBuffer);
+  vk_utils::createImgAllocAndBind(m_device, m_physicalDevice, m_width/fog_scale_factor, m_height/fog_scale_factor,
+                                  VK_FORMAT_R16G16B16A16_SFLOAT,
+                                  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &m_fogImageBuffer);
   vk_utils::createImgAllocAndBind(m_device, m_physicalDevice, m_width, m_height,
                                   VK_FORMAT_R16G16B16A16_SFLOAT,
                                   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &m_resultImageBuffer);
@@ -1287,6 +1487,16 @@ void SimpleRender::Cleanup()
   {
     vkDestroyPipeline(m_device, m_grassPipeline.pipeline, nullptr);
     m_grassPipeline.pipeline = VK_NULL_HANDLE;
+  }
+  if(m_fogPipeline.layout != VK_NULL_HANDLE)
+  {
+    vkDestroyPipelineLayout(m_device, m_fogPipeline.layout, nullptr);
+    m_fogPipeline.layout = VK_NULL_HANDLE;
+  }
+  if(m_fogPipeline.pipeline != VK_NULL_HANDLE)
+  {
+    vkDestroyPipeline(m_device, m_fogPipeline.pipeline, nullptr);
+    m_fogPipeline.pipeline = VK_NULL_HANDLE;
   }
   if(m_postEPipeline.layout != VK_NULL_HANDLE)
   {

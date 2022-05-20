@@ -63,6 +63,10 @@ void main()
         vec3 lightDiffuse = max(dot(Normal, lightDir), 0.0f) * li.lightColor.rgb;
 
         out_fragColor = vec4((lightDiffuse * subpassLoad(inputAlbedo).w + ambient) * Color, 0.5);
+
+        if (subpassLoad(inputDepth).r == 1) {
+            out_fragColor = vec4(0.1, 0.2, 0.3, 1.0);
+        }
     }
     else {
         // красивый затухающий свет

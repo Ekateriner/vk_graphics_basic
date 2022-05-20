@@ -14,15 +14,15 @@ out gl_PerVertex {
 void main(void)
 {
     if (gl_VertexIndex == 0) {
-        gl_Position = vec4(0.0, 0.0, 0.0, 0.0);
+        gl_Position = vec4(0.0f, 0.0f, 0.0f, 0.0f);
     }
     else if (gl_VertexIndex == 1) {
-        gl_Position = vec4(0.0, 1.0, 0.0, 0.0);
+        gl_Position = vec4(0.0f, 1.0f, 0.0f, 0.0f);
     }
     else if (gl_VertexIndex == 2) {
-        gl_Position = vec4(1.0, 0.0, 0.0, 0.0);
+        gl_Position = vec4(1.0f, 1.0f, 0.0f, 0.0f);
     }
     else if (gl_VertexIndex == 3) {
-        gl_Position = vec4(1.0, 1.0, 0.0, 0.0);
+        gl_Position = vec4(1.0f, 0.0f, 0.0f, 0.0f);
     }
 }

@@ -37,6 +37,9 @@ public:
   const std::string COMPUTE_SHADER_PATH = "../resources/shaders/frustum_cul.comp";
   const std::string GEOMETRY_SHADER_PATH = "../resources/shaders/hair.geom";
   
+  const std::string VERTEX_SHADER_PATH_FOG = "../resources/shaders/quad3_vert.vert";
+  const std::string FRAGMENT_SHADER_PATH_FOG = "../resources/shaders/fog.frag";
+  
   const std::string VERTEX_SHADER_PATH_POSTE = "../resources/shaders/quad3_vert.vert";
   const std::string FRAGMENT_SHADER_PATH_POSTE = "../resources/shaders/post_effects.frag";
   
@@ -145,6 +148,7 @@ protected:
   pipeline_data_t m_landscapePipeline {};
   pipeline_data_t m_grass_compPipeline {};
   pipeline_data_t m_grassPipeline {};
+  pipeline_data_t m_fogPipeline {};
   pipeline_data_t m_postEPipeline {};
 
   VkDescriptorSet m_fill_dSet = VK_NULL_HANDLE;
@@ -158,9 +162,15 @@ protected:
   VkRenderPass m_mainRenderPass = VK_NULL_HANDLE; // main renderpass
   VkFramebuffer m_mainFrameBuffer;
   VkRenderPass m_postRenderPass = VK_NULL_HANDLE; // post renderpass
+  VkRenderPass m_fogRenderPass = VK_NULL_HANDLE; // post renderpass
+  VkFramebuffer m_fogFrameBuffer;
   
   VkDescriptorSet m_landscape_dSet = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_landscape_dSetLayout = VK_NULL_HANDLE;
+  
+  VkDescriptorSet m_fog_dSet = VK_NULL_HANDLE;
+  VkDescriptorSetLayout m_fog_dSetLayout = VK_NULL_HANDLE;
+  uint32_t fog_scale_factor = 32;
   
   VkSampler m_simple_image_sampler = VK_NULL_HANDLE;
   
@@ -181,6 +191,7 @@ protected:
   static constexpr uint32_t m_gbuf_size = 4;
   
   vk_utils::VulkanImageMem m_resultImageBuffer{};
+  vk_utils::VulkanImageMem m_fogImageBuffer{};
   // ***
 
   // *** GUI

@@ -61,7 +61,12 @@ void main() {
     tcOut[gl_InvocationID].texCoord = vOut[gl_InvocationID].texCoord;
     if ( gl_InvocationID == 0 )         // set tessellation level, can do only for one vertex
     {
-        float depth = length(gl_in [gl_InvocationID].gl_Position.xyz);
+        mat4 mModel = mat4(scale.x, 0.0f, 0.0f, 0.0f,
+                           0.0f, scale.y, 0.0f, 0.0f,
+                           0.0f, 0.0f, scale.z, 0.0f,
+                           trans.x, trans.y, trans.z, 1.0f);
+
+        float depth = length((params.mView * mModel * vec4(vOut[gl_InvocationID].Pos, 1.0f)).xyz);
         if (depth <= nearfar.x) {
             gl_TessLevelInner [0] = 2;
             //gl_TessLevelInner [1] = 3;

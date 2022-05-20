@@ -2,9 +2,17 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_GOOGLE_include_directive : require
 
+#include "common.h"
+
 layout(location = 0) out vec4 out_fragColor;
 
-layout (binding = 0) uniform sampler2D inputColor;
+layout(binding = 0, set = 0) uniform AppData
+{
+    UniformParams Params;
+};
+
+layout (binding = 1) uniform sampler2D inputColor;
+layout (binding = 2) uniform sampler2D inputFog;
 
 layout (location = 0 ) in VS_OUT
 {
@@ -35,8 +43,36 @@ vec3 aces_fitted(vec3 v)
 
 void main()
 {
-    vec2 TexCoord = surf.texCoord;
-    TexCoord.y = 1.0 - TexCoord.y;
+//    vec2 TexCoord = surf.texCoord;
+//    TexCoord.y = 1.0 - TexCoord.y;
+    vec2 TexCoord = gl_FragCoord.xy/vec2(Params.screenWidth, Params.screenHeight);
 
-    out_fragColor = vec4(aces_fitted(textureLod(inputColor, TexCoord, 0).xyz), 1.0f);
+    // blur)
+    vec4 fog = vec4(0);
+
+    const int kernel_size = 6;
+    const int stride = 1;
+    const float k1 = 0.05;
+    const float h = 0.01;
+
+    float sum = 0.0;
+    float dx = (1.0 / Params.screenWidth);
+    float dy = (1.0 / Params.screenHeight);
+
+    vec4 center_clr = textureLod(inputFog, TexCoord, 0);
+    for (int i = -kernel_size / 2; i <= kernel_size / 2; i += stride) {
+        for (int j = -kernel_size / 2; j <= kernel_size / 2; j += stride) {
+            vec4 c = textureLod(inputFog, TexCoord + vec2(i*dx, j*dy), 0);
+            float f = float(i) * float(i) + float(j) * float(j);
+            float w = exp(-k1 * f);
+            w *= exp(-length(c - center_clr) * length(c - center_clr) / h);
+
+            fog += w*c;
+            sum += w;
+        }
+    }
+    fog = fog / sum;
+
+    vec3 color = (1 - fog.a) * textureLod(inputColor, TexCoord, 0).xyz + fog.rgb;
+    out_fragColor = vec4(aces_fitted(color), 1.0f);
 }
