@@ -89,6 +89,7 @@ struct SceneManager
   void DestroyScene();
   void CleanScene();
   void GenerateLandscapeTex(int width, int height);
+  void GenerateSphereSamples(int count);
   void UpdateGeoDataOnGPU();
 
   VkPipelineVertexInputStateCreateInfo GetPipelineVertexInputStateCreateInfo() { return m_pMeshData->VertexInputLayout();}
@@ -103,6 +104,7 @@ struct SceneManager
   VkBuffer GetLightInfoBuffer()  const { return m_lightInfoBuf; }
   VkBuffer GetLandInfoBuffer()  const { return m_landInfoBuf; }
   VkBuffer GetGrassInfoBuffer()  const { return m_grassInfoBuf; }
+  VkBuffer GetSampleBuffer()  const { return m_sampleBuf; }
   uint32_t GrassTilesNum() const {return (uint32_t)m_grass_info.tile_count.x * m_grass_info.tile_count.y;}
   uint32_t GrassMaxCount() const {return (uint32_t)m_grass_info.freq_max.x * m_grass_info.freq_max.y;}
   std::shared_ptr<vk_utils::ICopyEngine> GetCopyHelper() { return  m_pCopyHelper; }
@@ -146,6 +148,8 @@ private:
   void* m_landMappedMem = nullptr;
   VkDeviceMemory m_landMemAlloc = VK_NULL_HANDLE;
   
+  VkBuffer m_sampleBuf = VK_NULL_HANDLE;
+  VkDeviceMemory m_sampleMemAlloc = VK_NULL_HANDLE;
   GrassInfo m_grass_info = {};
   VkBuffer m_grassInfoBuf = VK_NULL_HANDLE;
   void* m_grassMappedMem = nullptr;

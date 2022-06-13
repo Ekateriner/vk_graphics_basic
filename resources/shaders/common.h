@@ -26,6 +26,7 @@ struct UniformParams
   uint screenHeight;
   float time;
   uint fog_scale;
+  uint samples_count;
   bool animateLightColor;
 };
 

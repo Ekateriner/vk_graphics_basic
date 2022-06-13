@@ -5,6 +5,7 @@
 #include "vk_buffers.h"
 #include "brown_gen.h"
 #include "blue_gen.h"
+#include "sphere_gen.h"
 //#include <random>
 #include "../loader_utils/hydraxml.h"
 
@@ -320,6 +321,18 @@ void SceneManager::DestroyBuffers() {
     m_grassInfoBuf = VK_NULL_HANDLE;
   }
   
+  if(m_sampleMemAlloc != VK_NULL_HANDLE)
+  {
+    vkFreeMemory(m_device, m_sampleMemAlloc, nullptr);
+    m_sampleMemAlloc = VK_NULL_HANDLE;
+  }
+  
+  if(m_sampleBuf != VK_NULL_HANDLE)
+  {
+    vkDestroyBuffer(m_device, m_sampleBuf, nullptr);
+    m_sampleBuf = VK_NULL_HANDLE;
+  }
+  
   if(m_grassMemAlloc != VK_NULL_HANDLE)
   {
     vkFreeMemory(m_device, m_grassMemAlloc, nullptr);
@@ -551,8 +564,21 @@ void SceneManager::GenerateLandscapeTex(int width, int height) {
   }
   
   VkDeviceSize linfoBufSize = m_lightInfos.size() * sizeof(LightInfo);
-  m_lightInfoBuf = vk_utils::createBuffer(m_device, linfoBufSize,   VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+  m_lightInfoBuf = vk_utils::createBuffer(m_device, linfoBufSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
   VkMemoryAllocateFlags allocFlags {};
   m_lightMemAlloc = vk_utils::allocateAndBindWithPadding(m_device, m_physDevice, {m_lightInfoBuf}, allocFlags);
   m_pCopyHelper->UpdateBuffer(m_lightInfoBuf, 0, m_lightInfos.data(), linfoBufSize);
+}
+
+void SceneManager::GenerateSphereSamples(int count) {
+  std::vector<LiteMath::float3> sphere_samples;
+  for (int i = 0; i < count; i++) {
+    sphere_samples.push_back(SphereGenerator::gen());
+  }
+  
+  VkDeviceSize BufSize = sphere_samples.size() * sizeof(LiteMath::float3);
+  m_sampleBuf = vk_utils::createBuffer(m_device, BufSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+  VkMemoryAllocateFlags allocFlags {};
+  m_sampleMemAlloc = vk_utils::allocateAndBindWithPadding(m_device, m_physDevice, {m_sampleBuf}, allocFlags);
+  m_pCopyHelper->UpdateBuffer(m_sampleBuf, 0, sphere_samples.data(), BufSize);
 }

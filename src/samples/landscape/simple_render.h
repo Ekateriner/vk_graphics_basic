@@ -40,6 +40,9 @@ public:
   const std::string VERTEX_SHADER_PATH_FOG = "../resources/shaders/quad3_vert.vert";
   const std::string FRAGMENT_SHADER_PATH_FOG = "../resources/shaders/fog.frag";
   
+  const std::string VERTEX_SHADER_PATH_SSAO = "../resources/shaders/quad3_vert.vert";
+  const std::string FRAGMENT_SHADER_PATH_SSAO = "../resources/shaders/ssao.frag";
+  
   const std::string VERTEX_SHADER_PATH_POSTE = "../resources/shaders/quad3_vert.vert";
   const std::string FRAGMENT_SHADER_PATH_POSTE = "../resources/shaders/post_effects.frag";
   
@@ -136,6 +139,8 @@ protected:
   
   int m_landscape_width = 128;
   int m_landscape_height = 128;
+  
+  int m_samples_count = 128;
 
   UniformParams m_uniforms {};
   VkBuffer m_ubo = VK_NULL_HANDLE;
@@ -149,6 +154,7 @@ protected:
   pipeline_data_t m_grass_compPipeline {};
   pipeline_data_t m_grassPipeline {};
   pipeline_data_t m_fogPipeline {};
+  pipeline_data_t m_ssaoPipeline {};
   pipeline_data_t m_postEPipeline {};
 
   VkDescriptorSet m_fill_dSet = VK_NULL_HANDLE;
@@ -162,8 +168,10 @@ protected:
   VkRenderPass m_mainRenderPass = VK_NULL_HANDLE; // main renderpass
   VkFramebuffer m_mainFrameBuffer;
   VkRenderPass m_postRenderPass = VK_NULL_HANDLE; // post renderpass
-  VkRenderPass m_fogRenderPass = VK_NULL_HANDLE; // post renderpass
+  VkRenderPass m_fogRenderPass = VK_NULL_HANDLE; // fog renderpass
   VkFramebuffer m_fogFrameBuffer;
+  VkRenderPass m_ssaoRenderPass = VK_NULL_HANDLE; // ssao renderpass
+  VkFramebuffer m_ssaoFrameBuffer;
   
   VkDescriptorSet m_landscape_dSet = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_landscape_dSetLayout = VK_NULL_HANDLE;
@@ -171,6 +179,9 @@ protected:
   VkDescriptorSet m_fog_dSet = VK_NULL_HANDLE;
   VkDescriptorSetLayout m_fog_dSetLayout = VK_NULL_HANDLE;
   uint32_t fog_scale_factor = 32;
+  
+  VkDescriptorSet m_ssao_dSet = VK_NULL_HANDLE;
+  VkDescriptorSetLayout m_ssao_dSetLayout = VK_NULL_HANDLE;
   
   VkSampler m_simple_image_sampler = VK_NULL_HANDLE;
   
@@ -192,6 +203,7 @@ protected:
   
   vk_utils::VulkanImageMem m_resultImageBuffer{};
   vk_utils::VulkanImageMem m_fogImageBuffer{};
+  vk_utils::VulkanImageMem m_ssaoImageBuffer{};
   // ***
 
   // *** GUI
