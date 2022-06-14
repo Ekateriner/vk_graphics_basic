@@ -37,6 +37,25 @@ layout (input_attachment_index = 3, set = 1, binding = 3) uniform subpassInput i
 
 const float lightSize = 0.1;
 const vec3 ambient = vec3(0.1);
+//const float trans_coef = 0.5;
+//
+//float distance(vec3 pos, vec3 N, int i){
+//    vec4 shrinkedpos = vec4(pos - 0.005f * N, 1.0);
+//    vec4 shwpos = mul(shrinkedpos, lights[i].viewproj);
+//    float d1 = shwmaps[i].Sample(sampler, shwpos.xy/shwpos.w);
+//    float d2 = shwpos.z;
+//    return abs(d1 - d2);
+//}
+//
+//// This function can be precomputed for efficiency
+//vec3 T(float s) {
+//    return vec3(0.233, 0.455, 0.649) * exp(-s*s/0.0064) + \
+//           vec3(0.1, 0.336, 0.344) * exp(-s*s/0.0484) + \
+//           vec3(0.118, 0.198, 0.0) * exp(-s*s/0.187) + \
+//           vec3(0.113, 0.007, 0.007) * exp(-s*s/0.567) + \
+//           vec3(0.358, 0.004, 0.0) * exp(-s*s/1.99) + \
+//           vec3(0.078, 0.0, 0.0) * exp(-s*s/7.41);
+//}
 
 float pow2 (float x) {
     return x * x;
@@ -60,9 +79,14 @@ void main()
 
     if (li.radius < 0.001f) {
         lightDir = normalize(lightDir);
-        vec3 lightDiffuse = max(dot(Normal, lightDir), 0.0f) * li.lightColor.rgb;
 
-        out_fragColor = vec4((lightDiffuse * subpassLoad(inputAlbedo).w + ambient) * Color, 0.5);
+//        float s = scale * distance(pos, Normal, light_ind);
+//        float E = max(0.3 + dot(-Normal, lightDir), 0.0);
+//        vec3 transmittance = T(s) * li.lightColor.rgb * Color * E * trans_coef;
+        vec3 lightDiffuse = max(dot(Normal, lightDir), 0.0f) * li.lightColor.rgb;
+        vec3 M = (lightDiffuse * subpassLoad(inputAlbedo).w + ambient) * Color;// + transmittance;
+
+        out_fragColor = vec4(M, 0.5);
 
         if (subpassLoad(inputDepth).r == 1) {
             out_fragColor = vec4(0.1, 0.2, 0.3, 1.0);

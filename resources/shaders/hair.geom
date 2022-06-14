@@ -2,8 +2,6 @@
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_GOOGLE_include_directive : require
 
-#include "common.h"
-
 layout(invocations = 2) in;
 
 layout(triangles) in;
@@ -29,11 +27,6 @@ layout(push_constant) uniform params_t
 {
     mat4 mProjView;
 } params;
-
-layout(binding = 0, set = 0) uniform AppData
-{
-    UniformParams Params;
-};
 
 const float length = 0.3f;
 const float width = 0.0001f;

@@ -180,9 +180,10 @@ private:
   std::shared_ptr<IRenderGUI> m_pGUIRender;
   virtual void SetupGUIElements();
   void DrawFrameWithGUI();
-  bool animate = true;
+  bool animate = false;
   bool vsm = true;
   bool spotlight = false;
+  bool sss = false;
   //
   
   void DrawFrameSimple();

@@ -21,6 +21,26 @@ layout(binding = 0, set = 0) uniform AppData
 
 layout (binding = 1) uniform sampler2D shadowMap;
 
+const float trans_coef = 0.5;
+
+float width(vec3 pos, vec3 N){
+    vec4 shrinkedpos = vec4(pos - 0.005f * N, 1.0);
+    vec4 shwpos = shrinkedpos * Params.lightMatrix;
+    float d1 = textureLod(shadowMap, shwpos.xy/shwpos.w, 0).x;
+    float d2 = shwpos.z;
+    return abs(d1 - d2);
+}
+
+// This function can be precomputed for efficiency
+vec3 T(float s) {
+    return vec3(0.233, 0.455, 0.649) * exp(-s*s/0.0064) + \
+           vec3(0.1, 0.336, 0.344) * exp(-s*s/0.0484) + \
+           vec3(0.118, 0.198, 0.0) * exp(-s*s/0.187) + \
+           vec3(0.113, 0.007, 0.007) * exp(-s*s/0.567) + \
+           vec3(0.358, 0.004, 0.0) * exp(-s*s/1.99) + \
+           vec3(0.078, 0.0, 0.0) * exp(-s*s/7.41);
+}
+
 void main()
 {
   const vec4 posLightClipSpace = Params.lightMatrix*vec4(surf.wPos, 1.0f); // 
@@ -73,6 +93,18 @@ void main()
   else {
     vec3 lightDir   = normalize(Params.lightPos - surf.wPos);
     lightColor = max(dot(surf.wNorm, lightDir), 0.0f) * lightColor;
-    out_fragColor   = (lightColor*shadow + vec4(0.1f)) * vec4(Params.baseColor, 1.0f);
+
+    float s = width(surf.wPos, surf.wNorm);
+    float E = max(0.3 + dot(-surf.wNorm, lightDir), 0.0);
+    vec3 transmittance = T(s) * color.rgb * Params.baseColor * E * trans_coef;
+
+    vec3 M = (lightColor*shadow + vec4(0.1f)).rgb * Params.baseColor.rgb;
+    if (Params.sss != 0) {
+      M += transmittance;
+    }
+
+    out_fragColor = vec4(M, 1.0);
+
+    //out_fragColor   = (lightColor*shadow + vec4(0.1f)) * vec4(Params.baseColor, 1.0f);
   }
 }

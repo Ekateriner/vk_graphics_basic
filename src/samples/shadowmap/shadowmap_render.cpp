@@ -16,6 +16,7 @@ SimpleShadowmapRender::SimpleShadowmapRender(uint32_t a_width, uint32_t a_height
 
 void SimpleShadowmapRender::SetupDeviceFeatures()
 {
+  m_enabledDeviceFeatures.geometryShader = VK_TRUE;
   // m_enabledDeviceFeatures.fillModeNonSolid = VK_TRUE;
 }
 
@@ -259,6 +260,7 @@ void SimpleShadowmapRender::SetupSimplePipeline()
   std::unordered_map<VkShaderStageFlagBits, std::string> shader_paths;
   {
     shader_paths[VK_SHADER_STAGE_FRAGMENT_BIT] = "../resources/shaders/simple_shadow.frag.spv";
+    //shader_paths[VK_SHADER_STAGE_GEOMETRY_BIT] = "../resources/shaders/hair.geom.spv";
     shader_paths[VK_SHADER_STAGE_VERTEX_BIT]   = "../resources/shaders/simple.vert.spv";
   }
   maker.LoadShaders(m_device, shader_paths);
@@ -275,6 +277,7 @@ void SimpleShadowmapRender::SetupSimplePipeline()
   // maker.SetDefaultState(m_width, m_height);
   shader_paths.clear();
   shader_paths[VK_SHADER_STAGE_VERTEX_BIT] = "../resources/shaders/simple.vert.spv";
+  //shader_paths[VK_SHADER_STAGE_GEOMETRY_BIT] = "../resources/shaders/hair.geom.spv";
   maker.LoadShaders(m_device, shader_paths);
 
   maker.viewport.width  = float(m_pShadowMap2->m_resolution.width);
@@ -326,6 +329,7 @@ void SimpleShadowmapRender::CreateUniformBuffer()
   m_uniforms.vsm = true;
   m_uniforms.flashLight = false;
   m_uniforms.flashMinMaxRadius = LiteMath::float3(0.1f, 0.2f, 5.0f);
+  m_uniforms.baseColor = LiteMath::float3(0.9f, 0.92f, 1.0f);
   //m_uniforms.lightPos = LiteMath::float3(0.0f, 0.0f, 10.0f);
 
   UpdateUniformBuffer(0.0f);
@@ -337,14 +341,13 @@ void SimpleShadowmapRender::UpdateUniformBuffer(float a_time)
   m_uniforms.lightPos    = m_light.cam.pos; //LiteMath::float3(sinf(a_time), 1.0f, cosf(a_time));
   m_uniforms.flashDir = m_light.cam.forward();
   m_uniforms.time        = a_time;
-
-  m_uniforms.baseColor = LiteMath::float3(0.9f, 0.92f, 1.0f);
+  
   memcpy(m_uboMappedMem, &m_uniforms, sizeof(m_uniforms));
 }
 
 void SimpleShadowmapRender::DrawSceneCmd(VkCommandBuffer a_cmdBuff, const float4x4& a_wvp)
 {
-  VkShaderStageFlags stageFlags = (VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+  VkShaderStageFlags stageFlags = (VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT); //| VK_SHADER_STAGE_GEOMETRY_BIT
 
   VkDeviceSize zero_offset = 0u;
   VkBuffer vertexBuf = m_pScnMgr->GetVertexBuffer();
@@ -741,7 +744,6 @@ void SimpleShadowmapRender::SetupGUIElements()
     
     ImGui::ColorEdit3("Meshes base color", m_uniforms.baseColor.M, ImGuiColorEditFlags_PickerHueWheel | ImGuiColorEditFlags_NoInputs);
     ImGui::Checkbox("Animate light source color", &animate);
-    m_uniforms.animateLightColor = animate;
     
     ImGui::Checkbox("Make variance shadow mapping", &vsm);
     if (m_uniforms.vsm != vsm) {
@@ -750,7 +752,7 @@ void SimpleShadowmapRender::SetupGUIElements()
     }
     
     ImGui::Checkbox("Use flashlight", &spotlight);
-    m_uniforms.flashLight = spotlight;
+    ImGui::Checkbox("Use subsurface scattering", &sss);
     
     //ImGui::SliderFloat3("Light source position", m_uniforms.lightPos.M, -10.f, 10.f);
     //ImGui::Text("Press H to enable/disable hair in geometry shader");
@@ -769,6 +771,10 @@ void SimpleShadowmapRender::SetupGUIElements()
   
   // Rendering
   ImGui::Render();
+  
+  m_uniforms.animateLightColor = animate;
+  m_uniforms.flashLight = spotlight;
+  m_uniforms.sss = sss;
 }
 
 void SimpleShadowmapRender::DrawFrameWithGUI()
